@@ -1,9 +1,10 @@
 # Build an LLM from Scratch 🧠→🤖
 
-A hands-on learning ladder: **15 small, runnable Python scripts** that take you
+A hands-on learning ladder: **17 small, runnable Python scripts** that take you
 from a 60-line neural network all the way to a **2026-architecture, instruction-
-and preference-tuned** GPT-style language model. Each script teaches **one** new
-concept, prints output you can actually read, and is heavily commented.
+and preference-tuned** GPT-style language model — down to a **quantized KV cache**.
+Each script teaches **one** new concept, prints output you can actually read, and
+is heavily commented.
 
 Nothing here is a black box. By the end, every core idea inside a frontier LLM
 (GPT-4, Claude, …) is something you've built and run yourself. The only thing
@@ -55,6 +56,8 @@ Run them in order. Each builds directly on the last.
 | 12 | `12_finetune.py` | **instruction tuning** | base model → assistant 🤖 |
 | 13 | `13_dpo.py` | **DPO** preference tuning | align without a reward model or RL (the modern RLHF) |
 | 14 | `14_modern_gpt.py` | **RoPE · RMSNorm · SwiGLU · GQA** | the 2026 architecture — better loss, fewer params |
+| 15 | `15_kv_cache.py` | **KV cache** | fix O(T²) generation — identical output, ~31× less work |
+| 16 | `16_kv_quant.py` | **TurboQuant** KV-cache quantization | 3-bit cache via the rotation trick (Google, ICLR 2026) |
 
 ---
 
@@ -87,6 +90,12 @@ Align it with **DPO** — the modern alternative to RLHF that needs no reward
 model and no RL loop (#13). Then rebuild the GPT with the components every
 frontier open model now uses — **RoPE, RMSNorm, SwiGLU, and GQA** — and watch it
 beat the classic design with *fewer* parameters (#14).
+
+**Act 6 — Inference efficiency (15–16).**
+Fix the hidden O(T²) flaw in generation with a real **KV cache** (#15), then
+**compress** that cache to ~3 bits with the rotation trick behind Google's
+**TurboQuant** (#16) — the difference between a model that's *correct* and one
+that's *deployable* at long context.
 
 ---
 

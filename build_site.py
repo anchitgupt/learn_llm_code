@@ -225,6 +225,41 @@ iter 2000  train 1.399  val 1.634   <- beats #09 with fewer params
 === Generated Shakespeare (modern architecture) ===
 JULIET:
 At, grones for your royalty, making, I'"""),
+    dict(n="15", phase="Inference efficiency · 2026", file="15_kv_cache.py",
+         title="The KV cache",
+         tag="fix O(T²) generation — cache past keys/values",
+         body=[
+             "Every <code>generate()</code> so far hid a flaw: to produce one token it re-encodes the <em>entire</em> context, recomputing keys and values that never change. That's <strong>O(T²)</strong> work. The <strong>KV cache</strong> stores each layer's past K/V and feeds in only the new token each step — turning generation into <strong>O(T)</strong>.",
+             "Proven on the #14 model: <strong>identical output</strong> to the naive loop with ~31× less work. And this is where #14's <strong>GQA</strong> finally pays off — a grouped-query model caches fewer kv-heads, so the cache itself is smaller.",
+         ],
+         out="""=== Correctness ===
+naive and cached produce identical tokens: True
+sample: 'ROMEO:\\nI shall be so seem the souls of the coursed...'
+
+=== Work done (token-forwards through the layers) ===
+naive : 1938   (~T^2/2 — recomputes the whole context each step)
+cached:   63   (T — one new token per step)   -> 31x less work
+
+=== KV-cache memory @ full context (fp16) ===
+GQA (2 kv-heads): 48 KB   vs   full multi-head: 96 KB  (2x smaller)"""),
+    dict(n="16", phase="Inference efficiency · 2026", file="16_kv_quant.py",
+         title="Compressing the cache · TurboQuant",
+         tag="3-bit KV cache via the rotation trick",
+         body=[
+             "At long context the KV cache — not the weights — is the memory wall. Google's <strong>TurboQuant</strong> (ICLR 2026, <a href=\"https://arxiv.org/abs/2504.19874\">arXiv:2504.19874</a>) shrinks it to <strong>~3 bits/value</strong> with near-zero loss. The obstacle is <em>outlier channels</em>; the trick is to <strong>rotate</strong> each vector by a random orthogonal matrix before quantizing — preserving dot products (so attention scores are unchanged) while spreading the outliers so few bits suffice.",
+             "Shown honestly: a rotation only helps heavy-tailed data, so on our tiny near-Gaussian model it's <em>neutral</em> — but on the outlier structure real LLMs have, rotate-then-quantize cuts error <strong>1.8×</strong> and lifts attention fidelity from <strong>0.67 → 0.85</strong>, at 5.3× compression.",
+         ],
+         out="""=== Why outliers matter: rotation only helps heavy-tailed data ===
+tiny model's real keys: near-Gaussian  ->  rotation ~neutral
+
+=== With realistic outlier channels (ratio 21) ===
+key reconstruction error @ 3-bit:
+  naive quantization   : 0.566
+  rotate-then-quantize  : 0.313   (1.8x lower)
+attention-output fidelity vs fp (cosine sim):
+  naive quantization   : 0.6658
+  rotate-then-quantize  : 0.8502
+memory: fp16 16 bits -> 3-bit = 5.3x smaller"""),
 ]
 
 
@@ -528,13 +563,13 @@ PAGE = """<!doctype html>
   <div class="wrap">
     <p class="kicker">Neural network &rarr; LLM &middot; in 15 steps</p>
     <h1 class="title">BUILD AN LLM<span class="l2">FROM <em>SCRATCH</em></span></h1>
-    <p class="lede">Fifteen small, <b>runnable</b> Python scripts that climb from a 60-line neural network to a 2026-architecture, instruction- and preference-tuned GPT. <b>No black boxes</b> &mdash; every idea inside a frontier model, built and run by hand.</p>
+    <p class="lede">Seventeen small, <b>runnable</b> Python scripts that climb from a 60-line neural network to a 2026-architecture, instruction- and preference-tuned GPT &mdash; down to a quantized KV cache. <b>No black boxes</b> &mdash; every idea inside a frontier model, built and run by hand.</p>
     <div class="cta">
       <a class="btn solid" href="#ladder">Start climbing &darr;</a>
       <a class="btn" href="#sota">What's latest (2026)</a>
     </div>
     <div class="stats">
-      <div class="stat"><div class="num">15</div><div class="lab">runnable scripts</div></div>
+      <div class="stat"><div class="num">17</div><div class="lab">runnable scripts</div></div>
       <div class="stat"><div class="num">0</div><div class="lab">magic / black boxes</div></div>
       <div class="stat"><div class="num">465K</div><div class="lab">params in the GPT</div></div>
       <div class="stat"><div class="num">2026</div><div class="lab">architecture &amp; alignment</div></div>
@@ -599,14 +634,15 @@ PAGE = """<!doctype html>
   </div>
 
   <p class="sec-lede" style="margin-top:28px;font-size:17px;color:var(--muted)">
-    Other current ideas worth knowing, all variations on what you've built: Multi-Latent Attention (DeepSeek) compresses the KV cache further; Mixture-of-Experts routes each token to a few specialist MLPs; QK-Norm adds stability. The atom is unchanged &mdash; it's attention, all the way down.</p>
+    The other front is <strong>inference efficiency</strong> (steps #15&ndash;#16): the KV cache, then quantizing it to ~3 bits with Google's TurboQuant. Beyond that, all variations on what you've built &mdash; Multi-Latent Attention (DeepSeek) compresses the cache further; Mixture-of-Experts routes each token to a few specialist MLPs; QK-Norm adds stability. The atom is unchanged &mdash; it's attention, all the way down.</p>
 
   <div class="sources">
     <strong style="color:var(--ink)">Sources</strong> &middot; checked May 2026<br>
     <a href="https://magazine.sebastianraschka.com/p/the-big-llm-architecture-comparison">Raschka &mdash; The Big LLM Architecture Comparison</a><br>
     <a href="https://llm-stats.com/blog/research/post-training-techniques-2026">Post-Training in 2026: GRPO, DAPO, RLVR &amp; Beyond</a><br>
     <a href="https://www.sundeepteki.org/advice/the-complete-guide-to-post-training-llms-how-sft-rlhf-dpo-and-grpo-shape-llms">The Complete Guide to Post-Training LLMs (SFT/RLHF/DPO/GRPO)</a><br>
-    <a href="https://arxiv.org/abs/2305.18290">Rafailov et al. &mdash; Direct Preference Optimization (DPO)</a>
+    <a href="https://arxiv.org/abs/2305.18290">Rafailov et al. &mdash; Direct Preference Optimization (DPO)</a><br>
+    <a href="https://arxiv.org/abs/2504.19874">TurboQuant &mdash; 3-bit KV-cache quantization (Google Research, ICLR 2026)</a>
   </div>
 </div></section>
 
@@ -627,7 +663,7 @@ python3 -m venv .venv
 
 <footer><div class="wrap">
   Built step by step, one runnable script at a time. <b>The architecture is GPT's; the scale is a laptop's.</b><br>
-  15 scripts &middot; neural&nbsp;network &rarr; tiny&nbsp;GPT &rarr; DPO-aligned, 2026-spec model &middot; no black boxes.
+  17 scripts &middot; neural&nbsp;network &rarr; tiny&nbsp;GPT &rarr; DPO-aligned, 2026-spec model with a quantized KV cache &middot; no black boxes.
 </div></footer>
 
 <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-core.min.js"></script>

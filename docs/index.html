@@ -185,13 +185,13 @@ footer b{color:var(--ink)}
   <div class="wrap">
     <p class="kicker">Neural network &rarr; LLM &middot; in 15 steps</p>
     <h1 class="title">BUILD AN LLM<span class="l2">FROM <em>SCRATCH</em></span></h1>
-    <p class="lede">Fifteen small, <b>runnable</b> Python scripts that climb from a 60-line neural network to a 2026-architecture, instruction- and preference-tuned GPT. <b>No black boxes</b> &mdash; every idea inside a frontier model, built and run by hand.</p>
+    <p class="lede">Seventeen small, <b>runnable</b> Python scripts that climb from a 60-line neural network to a 2026-architecture, instruction- and preference-tuned GPT &mdash; down to a quantized KV cache. <b>No black boxes</b> &mdash; every idea inside a frontier model, built and run by hand.</p>
     <div class="cta">
       <a class="btn solid" href="#ladder">Start climbing &darr;</a>
       <a class="btn" href="#sota">What's latest (2026)</a>
     </div>
     <div class="stats">
-      <div class="stat"><div class="num">15</div><div class="lab">runnable scripts</div></div>
+      <div class="stat"><div class="num">17</div><div class="lab">runnable scripts</div></div>
       <div class="stat"><div class="num">0</div><div class="lab">magic / black boxes</div></div>
       <div class="stat"><div class="num">465K</div><div class="lab">params in the GPT</div></div>
       <div class="stat"><div class="num">2026</div><div class="lab">architecture &amp; alignment</div></div>
@@ -235,7 +235,10 @@ footer b{color:var(--ink)}
 <a href="#s12"><span class="nn">12</span> Instruction tuning</a>
 <div class="ph">State of the art · 2026</div>
 <a href="#s13"><span class="nn">13</span> Preference tuning with DPO</a>
-<a href="#s14"><span class="nn">14</span> The 2026 architecture</a></nav>
+<a href="#s14"><span class="nn">14</span> The 2026 architecture</a>
+<div class="ph">Inference efficiency · 2026</div>
+<a href="#s15"><span class="nn">15</span> The KV cache</a>
+<a href="#s16"><span class="nn">16</span> Compressing the cache · TurboQuant</a></nav>
     <div class="steps"><div class="phase-div">Foundation</div>
 
 <article class="step" id="s00">
@@ -2725,6 +2728,367 @@ if __name__ == "__main__":
 </code></pre>
     </details>
   </div>
+</article>
+<div class="phase-div">Inference efficiency · 2026</div>
+
+<article class="step" id="s15">
+  <div class="head">
+    <span class="nn">15</span>
+    <div>
+      <h3>The KV cache</h3>
+      <div class="tag">fix O(T²) generation — cache past keys/values</div>
+    </div>
+    <span class="file">15_kv_cache.py</span>
+  </div>
+  <div class="body">
+    <p>Every <code>generate()</code> so far hid a flaw: to produce one token it re-encodes the <em>entire</em> context, recomputing keys and values that never change. That's <strong>O(T²)</strong> work. The <strong>KV cache</strong> stores each layer's past K/V and feeds in only the new token each step — turning generation into <strong>O(T)</strong>.</p>
+<p>Proven on the #14 model: <strong>identical output</strong> to the naive loop with ~31× less work. And this is where #14's <strong>GQA</strong> finally pays off — a grouped-query model caches fewer kv-heads, so the cache itself is smaller.</p>
+    <div class="term">
+      <div class="top"><span class="dot g"></span><span class="dot"></span><span class="dot"></span>
+        <span>15_kv_cache.py</span><span class="out-lab">output</span></div>
+      <pre>=== Correctness ===
+naive and cached produce identical tokens: True
+sample: 'ROMEO:\nI shall be so seem the souls of the coursed...'
+
+=== Work done (token-forwards through the layers) ===
+naive : 1938   (~T^2/2 — recomputes the whole context each step)
+cached:   63   (T — one new token per step)   -&gt; 31x less work
+
+=== KV-cache memory @ full context (fp16) ===
+GQA (2 kv-heads): 48 KB   vs   full multi-head: 96 KB  (2x smaller)</pre>
+    </div>
+    <details class="src">
+      <summary><span class="chev">&#9656;</span> View full source &middot; 15_kv_cache.py</summary>
+      <pre><code class="language-python">"""
+#15 in the "NN to tiny LLM" ladder.  (fixing the KV-cache problem)
+
+Every generate() we've written so far has a hidden flaw. To produce one new
+token it reruns the WHOLE sequence through the network:
+
+    logits, _ = self(idx[:, -BLOCK_SIZE:])   # recompute keys/values for ALL tokens
+
+So generating T tokens costs ~T**2/2 token-forwards. The keys and values for the
+earlier tokens never change once computed, yet we recompute them every step.
+
+The fix is the KV CACHE: store each layer's past keys (K) and values (V), and at
+each step feed in only the ONE new token, attending its query over the cached
+K/V. That makes generation O(T) instead of O(T**2). This is also where #14's GQA
+finally pays off: a grouped-query model caches FEWER kv-heads, so the cache is
+smaller.
+
+This script reuses the trained #14 model (modern_gpt.pt), implements a cache-based
+decoder, and proves it produces the EXACT same tokens as the naive loop while
+doing far less work.
+
+Run with:  python 15_kv_cache.py   (requires modern_gpt.pt from running #14 first)
+"""
+
+import importlib.util
+import os
+import time
+
+import torch
+import torch.nn.functional as F
+
+# Reuse the #14 model, its building blocks, and the tokenizer.
+spec = importlib.util.spec_from_file_location("modern_gpt", "14_modern_gpt.py")
+mg = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(mg)
+
+DEVICE = mg.DEVICE
+BLOCK = mg.BLOCK_SIZE
+tg = mg.tg
+
+
+@torch.no_grad()
+def naive_generate(model, prompt, n_new):
+    """The old way: re-encode the whole context every single step."""
+    idx = torch.tensor([prompt], device=DEVICE)
+    token_forwards = 0
+    for _ in range(n_new):
+        ctx = idx[:, -BLOCK:]
+        token_forwards += ctx.shape[1]          # every token re-processed
+        logits, _ = model(ctx)
+        nxt = logits[:, -1, :].argmax(dim=-1, keepdim=True)
+        idx = torch.cat([idx, nxt], dim=1)
+    return idx[0].tolist(), token_forwards
+
+
+@torch.no_grad()
+def _step(model, caches, token_id, pos):
+    """Run ONE token through the layers at absolute position `pos`, updating
+    the per-layer K/V caches, and return the next-token logits."""
+    B = 1
+    groups = mg.N_HEAD // mg.N_KV_HEAD
+    x = model.token_emb(torch.tensor([[token_id]], device=DEVICE))   # (1, 1, C)
+    cos, sin = model.cos[pos:pos + 1], model.sin[pos:pos + 1]
+
+    for i, block in enumerate(model.blocks):
+        a = block.attn
+        h = block.attn_norm(x)
+        q = a.q_proj(h).view(B, 1, mg.N_HEAD, mg.HEAD_DIM).transpose(1, 2)
+        k = a.k_proj(h).view(B, 1, mg.N_KV_HEAD, mg.HEAD_DIM).transpose(1, 2)
+        v = a.v_proj(h).view(B, 1, mg.N_KV_HEAD, mg.HEAD_DIM).transpose(1, 2)
+        q, k = mg.apply_rope(q, cos, sin), mg.apply_rope(k, cos, sin)
+
+        # Append this token's K/V to the cache, then attend over ALL of it.
+        if caches[i]["k"] is None:
+            caches[i]["k"], caches[i]["v"] = k, v
+        else:
+            caches[i]["k"] = torch.cat([caches[i]["k"], k], dim=2)
+            caches[i]["v"] = torch.cat([caches[i]["v"], v], dim=2)
+        K, V = caches[i]["k"], caches[i]["v"]            # (1, n_kv, pos+1, hd)
+
+        Kr = K.repeat_interleave(groups, dim=1)          # GQA: share kv across heads
+        Vr = V.repeat_interleave(groups, dim=1)
+        att = (q @ Kr.transpose(-2, -1)) / mg.HEAD_DIM ** 0.5     # (1, nh, 1, pos+1)
+        att = F.softmax(att, dim=-1)                     # no mask: cache is all past
+        o = (att @ Vr).transpose(1, 2).contiguous().view(B, 1, mg.N_HEAD * mg.HEAD_DIM)
+        x = x + a.o_proj(o)
+        x = x + block.ffn(block.ffn_norm(x))
+
+    return model.head(model.norm(x))[:, -1, :]           # (1, vocab)
+
+
+@torch.no_grad()
+def cached_generate(model, prompt, n_new):
+    """The fix: prefill the prompt into per-layer caches, then emit one token
+    at a time, processing only the newest token each step."""
+    caches = [{"k": None, "v": None} for _ in model.blocks]
+    tokens = list(prompt)
+    token_forwards = 0
+    pos = 0
+
+    logits = None
+    for t in prompt:                                     # prefill the prompt
+        logits = _step(model, caches, t, pos); pos += 1; token_forwards += 1
+    for _ in range(n_new):                               # then generate
+        nxt = int(logits.argmax(dim=-1))
+        tokens.append(nxt)
+        logits = _step(model, caches, nxt, pos); pos += 1; token_forwards += 1
+    return tokens, token_forwards
+
+
+def cache_bytes(n_tokens, kv_heads, dtype_bytes=2):
+    """Total KV-cache size: 2 (K&amp;V) x layers x kv_heads x head_dim x tokens."""
+    return 2 * mg.N_LAYER * kv_heads * mg.HEAD_DIM * n_tokens * dtype_bytes
+
+
+if __name__ == "__main__":
+    if not os.path.exists(mg.CKPT_PATH):
+        raise SystemExit("No modern_gpt.pt — run `python 14_modern_gpt.py` first.")
+    model = mg.ModernGPT().to(DEVICE)
+    model.load_state_dict(torch.load(mg.CKPT_PATH, map_location=DEVICE)["model"])
+    model.eval()
+
+    prompt = tg.encode("ROMEO:")                         # a real prompt -&gt; readable output
+    N = BLOCK - len(prompt) - 1                           # stay within the trained context
+    naive_ids, naive_fw = naive_generate(model, prompt, N)
+    cached_ids, cached_fw = cached_generate(model, prompt, N)
+
+    print("=== Correctness ===")
+    print(f"naive and cached produce identical tokens: {naive_ids == cached_ids}")
+    print(f"sample: {tg.decode(cached_ids)!r}\n")
+
+    print("=== Work done (token-forwards through the layers) ===")
+    print(f"naive : {naive_fw:5d}   (~T^2/2 — recomputes the whole context each step)")
+    print(f"cached: {cached_fw:5d}   (T — prefill + one new token per step)")
+    print(f"-&gt; {naive_fw / cached_fw:.0f}x less work for {N} new tokens\n")
+
+    print("=== Wall-clock (30 runs) ===")
+    t0 = time.perf_counter(); [naive_generate(model, prompt, N) for _ in range(30)]
+    t_naive = time.perf_counter() - t0
+    t0 = time.perf_counter(); [cached_generate(model, prompt, N) for _ in range(30)]
+    t_cached = time.perf_counter() - t0
+    print(f"naive : {t_naive:.2f}s")
+    print(f"cached: {t_cached:.2f}s   ({t_naive / t_cached:.1f}x faster)\n")
+
+    print("=== KV-cache memory @ full context (fp16) ===")
+    gqa = cache_bytes(BLOCK, mg.N_KV_HEAD)
+    mha = cache_bytes(BLOCK, mg.N_HEAD)
+    print(f"GQA ({mg.N_KV_HEAD} kv-heads): {gqa/1024:.1f} KB")
+    print(f"full multi-head ({mg.N_HEAD} heads): {mha/1024:.1f} KB  "
+          f"-&gt; GQA is {mha/gqa:.0f}x smaller")
+    print("\nThis cache is what Google's TurboQuant compresses (next: #16).")
+</code></pre>
+    </details>
+  </div>
+</article>
+
+<article class="step" id="s16">
+  <div class="head">
+    <span class="nn">16</span>
+    <div>
+      <h3>Compressing the cache · TurboQuant</h3>
+      <div class="tag">3-bit KV cache via the rotation trick</div>
+    </div>
+    <span class="file">16_kv_quant.py</span>
+  </div>
+  <div class="body">
+    <p>At long context the KV cache — not the weights — is the memory wall. Google's <strong>TurboQuant</strong> (ICLR 2026, <a href="https://arxiv.org/abs/2504.19874">arXiv:2504.19874</a>) shrinks it to <strong>~3 bits/value</strong> with near-zero loss. The obstacle is <em>outlier channels</em>; the trick is to <strong>rotate</strong> each vector by a random orthogonal matrix before quantizing — preserving dot products (so attention scores are unchanged) while spreading the outliers so few bits suffice.</p>
+<p>Shown honestly: a rotation only helps heavy-tailed data, so on our tiny near-Gaussian model it's <em>neutral</em> — but on the outlier structure real LLMs have, rotate-then-quantize cuts error <strong>1.8×</strong> and lifts attention fidelity from <strong>0.67 → 0.85</strong>, at 5.3× compression.</p>
+    <div class="term">
+      <div class="top"><span class="dot g"></span><span class="dot"></span><span class="dot"></span>
+        <span>16_kv_quant.py</span><span class="out-lab">output</span></div>
+      <pre>=== Why outliers matter: rotation only helps heavy-tailed data ===
+tiny model's real keys: near-Gaussian  -&gt;  rotation ~neutral
+
+=== With realistic outlier channels (ratio 21) ===
+key reconstruction error @ 3-bit:
+  naive quantization   : 0.566
+  rotate-then-quantize  : 0.313   (1.8x lower)
+attention-output fidelity vs fp (cosine sim):
+  naive quantization   : 0.6658
+  rotate-then-quantize  : 0.8502
+memory: fp16 16 bits -&gt; 3-bit = 5.3x smaller</pre>
+    </div>
+    <details class="src">
+      <summary><span class="chev">&#9656;</span> View full source &middot; 16_kv_quant.py</summary>
+      <pre><code class="language-python">"""
+#16 in the "NN to tiny LLM" ladder.  (compressing the KV cache, TurboQuant-style)
+
+#15 gave us a KV cache. At long context lengths that cache — not the weights —
+becomes the memory bottleneck (it grows with every token). The fix is to store
+it in fewer bits. This is what Google Research's TurboQuant does (ICLR 2026,
+arXiv:2504.19874): it compresses the KV cache to ~3 bits/value with almost no
+quality loss — ~6x smaller, ~8x faster attention.
+
+The obstacle, and the trick:
+
+  PROBLEM: real K/V vectors have OUTLIER CHANNELS — a few coordinates with huge
+  magnitude. With one shared scale, naive low-bit quantization is forced to span
+  those outliers, so every ordinary value collapses onto a coarse grid.
+
+  TRICK (TurboQuant's PolarQuant stage): ROTATE each vector by a random
+  orthogonal matrix before quantizing. A rotation preserves lengths and dot
+  products (so attention scores are unchanged if you rotate queries the same
+  way), while smearing the outliers across all coordinates — so the rotated
+  vector quantizes cleanly. Quantize it, store it, rotate back on read.
+
+IMPORTANT / HONEST NOTE: a rotation only helps when outliers exist. A purely
+Gaussian tensor is rotation-invariant, so the trick does nothing for it. Our
+tiny Shakespeare model is too small to develop strong outliers (we measure this
+below), so we demonstrate the mechanism on a key matrix carrying the outlier
+structure that real, larger LLMs are documented to have.
+
+Run with:  python 16_kv_quant.py   (requires modern_gpt.pt from running #14 first)
+"""
+
+import importlib.util
+import os
+
+import torch
+import torch.nn.functional as F
+
+spec = importlib.util.spec_from_file_location("modern_gpt", "14_modern_gpt.py")
+mg = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(mg)
+
+DEVICE = mg.DEVICE
+tg = mg.tg
+torch.manual_seed(0)
+
+BITS = 3   # TurboQuant's headline precision
+
+
+def quantize(x, bits=BITS):
+    """Per-tensor affine quantize to `bits` bits, then dequantize. One shared
+    (min, scale) — the regime where a single outlier wrecks precision."""
+    qmax = 2 ** bits - 1
+    lo, hi = x.min(), x.max()
+    scale = (hi - lo) / qmax
+    return torch.round((x - lo) / scale) * scale + lo
+
+
+def random_orthogonal(d):
+    """Random orthogonal matrix via QR (stands in for TurboQuant's fast
+    randomized Hadamard transform — same length/dot-product preservation)."""
+    q, _ = torch.linalg.qr(torch.randn(d, d, device=DEVICE))
+    return q
+
+
+def rel_error(approx, exact):
+    return ((approx - exact).norm() / exact.norm()).item()
+
+
+def cos_sim(a, b):
+    return F.cosine_similarity(a.flatten(), b.flatten(), dim=0).item()
+
+
+def outlier_ratio(x):
+    return (x.abs().max() / x.abs().mean()).item()
+
+
+@torch.no_grad()
+def real_keys(model):
+    """Real keys from layer 0, head 0 of the trained #14 model."""
+    ids = torch.tensor([tg.encode(tg.text[2000:2040])], device=DEVICE)
+    T = ids.shape[1]
+    h = model.blocks[0].attn_norm(model.token_emb(ids))
+    a = model.blocks[0].attn
+    k = mg.apply_rope(
+        a.k_proj(h).view(1, T, mg.N_KV_HEAD, mg.HEAD_DIM).transpose(1, 2),
+        model.cos[:T], model.sin[:T])
+    return k[0, 0]                                  # (T, head_dim)
+
+
+def attention(q, k, v):
+    scores = (q @ k.transpose(-2, -1)) / mg.HEAD_DIM ** 0.5
+    return F.softmax(scores, dim=-1) @ v
+
+
+if __name__ == "__main__":
+    if not os.path.exists(mg.CKPT_PATH):
+        raise SystemExit("No modern_gpt.pt — run `python 14_modern_gpt.py` first.")
+    model = mg.ModernGPT().to(DEVICE)
+    model.load_state_dict(torch.load(mg.CKPT_PATH, map_location=DEVICE)["model"])
+    model.eval()
+
+    d = mg.HEAD_DIM
+    R = random_orthogonal(d)
+    k_real = real_keys(model)
+
+    print("=== Why outliers matter: rotation only helps heavy-tailed data ===")
+    print(f"our tiny model's real keys — outlier ratio (max/mean |k|): "
+          f"{outlier_ratio(k_real):.1f}  (near-Gaussian)")
+    print(f"  naive {BITS}-bit error : {rel_error(quantize(k_real), k_real):.3f}")
+    print(f"  rotated {BITS}-bit error: {rel_error(quantize(k_real @ R) @ R.T, k_real):.3f}"
+          f"   (rotation ~neutral — nothing to fix)\n")
+
+    # Emulate the outlier-channel structure that real, larger LLMs exhibit:
+    # a handful of coordinates carry very large magnitude.
+    T = k_real.shape[0]
+    k = torch.randn(T, d, device=DEVICE) * 0.4
+    v = torch.randn(T, d, device=DEVICE) * 0.4
+    q = torch.randn(T, d, device=DEVICE) * 0.4
+    for ch in (3, 11, 19):                           # outlier channels
+        k[:, ch] *= 14
+        v[:, ch] *= 14
+    print(f"=== Now with realistic outlier channels (ratio {outlier_ratio(k):.0f}) ===")
+
+    k_naive, k_rot = quantize(k), quantize(k @ R) @ R.T
+    e_naive, e_rot = rel_error(k_naive, k), rel_error(k_rot, k)
+    print(f"key reconstruction error @ {BITS}-bit:")
+    print(f"  naive quantization      : {e_naive:.3f}")
+    print(f"  rotate-then-quantize     : {e_rot:.3f}   ({e_naive / e_rot:.1f}x lower)\n")
+
+    # End-to-end attention output (rotate q &amp; k together -&gt; scores preserved).
+    ctx_fp = attention(q, k, v)
+    ctx_naive = attention(q, quantize(k), quantize(v))
+    scores_rot = ((q @ R) @ quantize(k @ R).transpose(-2, -1)) / d ** 0.5
+    ctx_rot = (F.softmax(scores_rot, dim=-1) @ quantize(v @ R)) @ R.T
+    print(f"attention-output fidelity vs fp (cosine sim, higher is better):")
+    print(f"  naive quantization      : {cos_sim(ctx_naive, ctx_fp):.4f}")
+    print(f"  rotate-then-quantize     : {cos_sim(ctx_rot, ctx_fp):.4f}\n")
+
+    print(f"=== Memory ===  fp16 = 16 bits/value;  {BITS}-bit -&gt; {16/BITS:.1f}x smaller")
+    print("\nThat's TurboQuant in miniature: a cheap rotation spreads the outliers")
+    print("so aggressive low-bit KV-cache quantization stays accurate. Real")
+    print("TurboQuant adds a fast Hadamard transform + a residual-correction stage")
+    print("to reach ~6x compression and ~8x faster attention at scale.")
+</code></pre>
+    </details>
+  </div>
 </article></div>
   </div>
 </div></section>
@@ -2765,14 +3129,15 @@ if __name__ == "__main__":
   </div>
 
   <p class="sec-lede" style="margin-top:28px;font-size:17px;color:var(--muted)">
-    Other current ideas worth knowing, all variations on what you've built: Multi-Latent Attention (DeepSeek) compresses the KV cache further; Mixture-of-Experts routes each token to a few specialist MLPs; QK-Norm adds stability. The atom is unchanged &mdash; it's attention, all the way down.</p>
+    The other front is <strong>inference efficiency</strong> (steps #15&ndash;#16): the KV cache, then quantizing it to ~3 bits with Google's TurboQuant. Beyond that, all variations on what you've built &mdash; Multi-Latent Attention (DeepSeek) compresses the cache further; Mixture-of-Experts routes each token to a few specialist MLPs; QK-Norm adds stability. The atom is unchanged &mdash; it's attention, all the way down.</p>
 
   <div class="sources">
     <strong style="color:var(--ink)">Sources</strong> &middot; checked May 2026<br>
     <a href="https://magazine.sebastianraschka.com/p/the-big-llm-architecture-comparison">Raschka &mdash; The Big LLM Architecture Comparison</a><br>
     <a href="https://llm-stats.com/blog/research/post-training-techniques-2026">Post-Training in 2026: GRPO, DAPO, RLVR &amp; Beyond</a><br>
     <a href="https://www.sundeepteki.org/advice/the-complete-guide-to-post-training-llms-how-sft-rlhf-dpo-and-grpo-shape-llms">The Complete Guide to Post-Training LLMs (SFT/RLHF/DPO/GRPO)</a><br>
-    <a href="https://arxiv.org/abs/2305.18290">Rafailov et al. &mdash; Direct Preference Optimization (DPO)</a>
+    <a href="https://arxiv.org/abs/2305.18290">Rafailov et al. &mdash; Direct Preference Optimization (DPO)</a><br>
+    <a href="https://arxiv.org/abs/2504.19874">TurboQuant &mdash; 3-bit KV-cache quantization (Google Research, ICLR 2026)</a>
   </div>
 </div></section>
 
@@ -2793,7 +3158,7 @@ python3 -m venv .venv
 
 <footer><div class="wrap">
   Built step by step, one runnable script at a time. <b>The architecture is GPT's; the scale is a laptop's.</b><br>
-  15 scripts &middot; neural&nbsp;network &rarr; tiny&nbsp;GPT &rarr; DPO-aligned, 2026-spec model &middot; no black boxes.
+  17 scripts &middot; neural&nbsp;network &rarr; tiny&nbsp;GPT &rarr; DPO-aligned, 2026-spec model with a quantized KV cache &middot; no black boxes.
 </div></footer>
 
 <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-core.min.js"></script>
