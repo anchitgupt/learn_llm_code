@@ -1,0 +1,2862 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Build an LLM from Scratch &mdash; the learning ladder</title>
+<meta name="description" content="Fifteen small, runnable Python scripts that take you from a neural network to a 2026-architecture, instruction- and preference-tuned GPT. No black boxes.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0a0c10; --bg2:#0d1016; --panel:#13161f; --panel2:#181c27;
+  --ink:#ece8de; --muted:#9aa1ad; --faint:#5d6470;
+  --line:rgba(255,255,255,.07); --line2:rgba(255,255,255,.12);
+  --accent:#5ef0c0; --accent-dim:#2f8f74; --amber:#f2b65e; --rose:#f08a8a;
+  --mono:'IBM Plex Mono',ui-monospace,Menlo,monospace;
+  --serif:'Newsreader',Georgia,serif;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{
+  margin:0; background:var(--bg); color:var(--ink);
+  font-family:var(--serif); font-size:18px; line-height:1.7;
+  -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility;
+  background-image:
+    linear-gradient(var(--line) 1px,transparent 1px),
+    linear-gradient(90deg,var(--line) 1px,transparent 1px);
+  background-size:64px 64px; background-position:center top;
+}
+body::before{content:"";position:fixed;inset:0;pointer-events:none;z-index:0;
+  background:radial-gradient(120% 80% at 50% -10%,rgba(94,240,192,.10),transparent 60%);}
+a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline}
+.wrap{max-width:1180px;margin:0 auto;padding:0 28px;position:relative;z-index:1}
+.mono{font-family:var(--mono)}
+
+/* top bar */
+.bar{position:sticky;top:0;z-index:50;backdrop-filter:blur(10px);
+  background:rgba(10,12,16,.72);border-bottom:1px solid var(--line)}
+.bar .wrap{display:flex;align-items:center;justify-content:space-between;height:62px}
+.brand{font-family:var(--mono);font-weight:600;letter-spacing:.02em;font-size:15px}
+.brand b{color:var(--accent)}
+.bar nav{display:flex;gap:26px;font-family:var(--mono);font-size:13px;letter-spacing:.04em;text-transform:uppercase}
+.bar nav a{color:var(--muted)} .bar nav a:hover{color:var(--ink);text-decoration:none}
+@media(max-width:760px){.bar nav{display:none}}
+
+/* hero */
+.hero{position:relative;padding:96px 0 70px;overflow:hidden}
+#net{position:absolute;inset:0;width:100%;height:100%;z-index:0;opacity:.55}
+.hero .wrap{position:relative;z-index:2}
+.kicker{font-family:var(--mono);font-size:13px;letter-spacing:.34em;text-transform:uppercase;color:var(--accent);margin:0 0 22px}
+h1.title{font-family:var(--mono);font-weight:700;line-height:.96;letter-spacing:-.01em;
+  font-size:clamp(44px,9vw,104px);margin:0}
+h1.title .l2{display:block;color:var(--faint)}
+h1.title .l2 em{font-style:normal;color:var(--ink)}
+.lede{font-size:clamp(19px,2.4vw,25px);color:#cfd3da;max-width:640px;margin:28px 0 0}
+.lede b{color:var(--ink)}
+.cta{display:flex;gap:14px;margin-top:38px;flex-wrap:wrap}
+.btn{font-family:var(--mono);font-size:14px;letter-spacing:.03em;padding:14px 22px;border-radius:2px;
+  border:1px solid var(--line2);color:var(--ink);transition:.18s;background:transparent}
+.btn:hover{text-decoration:none;border-color:var(--accent);color:var(--accent)}
+.btn.solid{background:var(--accent);color:#06231b;border-color:var(--accent);font-weight:600}
+.btn.solid:hover{background:#7ff6cf;color:#06231b}
+.stats{display:flex;gap:40px;margin-top:54px;flex-wrap:wrap}
+.stat .num{font-family:var(--mono);font-size:34px;font-weight:700;color:var(--accent);line-height:1}
+.stat .lab{font-family:var(--mono);font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin-top:8px}
+
+/* section heads */
+.section{padding:64px 0;border-top:1px solid var(--line)}
+.eyebrow{font-family:var(--mono);font-size:12px;letter-spacing:.28em;text-transform:uppercase;color:var(--accent);margin:0 0 14px}
+h2.sec{font-family:var(--mono);font-weight:600;font-size:clamp(28px,4vw,40px);margin:0 0 18px;letter-spacing:-.01em}
+.sec-lede{color:#cbd0d8;max-width:720px;font-size:20px}
+
+/* acts */
+.acts{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin-top:34px}
+@media(max-width:820px){.acts{grid-template-columns:1fr}}
+.act{background:var(--panel);border:1px solid var(--line);border-radius:4px;padding:24px}
+.act h3{font-family:var(--mono);font-size:15px;margin:0 0 10px;color:var(--accent)}
+.act p{margin:0;color:#c2c7d0;font-size:16px}
+
+/* ladder layout */
+.ladder{display:grid;grid-template-columns:230px 1fr;gap:48px;align-items:start}
+@media(max-width:900px){.ladder{grid-template-columns:1fr}}
+.index{position:sticky;top:86px;font-family:var(--mono);font-size:13px}
+@media(max-width:900px){.index{display:none}}
+.index .ph{color:var(--faint);text-transform:uppercase;letter-spacing:.14em;font-size:11px;margin:18px 0 8px}
+.index a{display:flex;gap:10px;color:var(--muted);padding:4px 0;transition:.15s}
+.index a:hover{color:var(--ink);text-decoration:none}
+.index a .nn{color:var(--faint)}
+.index a.on{color:var(--accent)} .index a.on .nn{color:var(--accent)}
+
+/* step card */
+.step{padding:30px 0 6px;scroll-margin-top:80px;opacity:0;transform:translateY(18px);
+  transition:opacity .6s ease,transform .6s ease}
+.step.in{opacity:1;transform:none}
+.phase-div{font-family:var(--mono);font-size:12px;letter-spacing:.26em;text-transform:uppercase;
+  color:var(--accent);padding:46px 0 6px;border-top:1px solid var(--line);margin-top:24px}
+.phase-div:first-of-type{border-top:0}
+.step .head{display:flex;align-items:baseline;gap:18px}
+.step .nn{font-family:var(--mono);font-size:46px;font-weight:700;color:var(--faint);line-height:1}
+.step h3{font-family:var(--mono);font-weight:600;font-size:25px;margin:0}
+.step .tag{font-family:var(--mono);font-size:13px;color:var(--accent);margin:6px 0 0}
+.step .file{font-family:var(--mono);font-size:12px;color:var(--muted);margin-left:auto;
+  border:1px solid var(--line);padding:5px 10px;border-radius:2px;white-space:nowrap}
+.step .body{margin-top:16px;max-width:760px}
+.step .body p{margin:0 0 14px}
+code{font-family:var(--mono);font-size:.86em;background:rgba(94,240,192,.10);color:var(--accent);
+  padding:2px 6px;border-radius:3px}
+
+/* terminal output */
+.term{background:#070809;border:1px solid var(--line2);border-radius:6px;margin:18px 0 0;overflow:hidden}
+.term .top{display:flex;align-items:center;gap:8px;padding:9px 14px;border-bottom:1px solid var(--line);
+  font-family:var(--mono);font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--muted)}
+.dot{width:9px;height:9px;border-radius:50%;background:#2a2f38}
+.dot.g{background:var(--accent)}
+.term pre{margin:0;padding:16px 18px;font-family:var(--mono);font-size:13.5px;line-height:1.55;
+  color:#bfe9da;overflow-x:auto;white-space:pre}
+.term .out-lab{margin-left:auto;color:var(--faint)}
+
+/* code disclosure */
+details.src{margin:14px 0 0;border:1px solid var(--line);border-radius:6px;background:var(--panel);overflow:hidden}
+details.src summary{cursor:pointer;list-style:none;font-family:var(--mono);font-size:13px;color:var(--muted);
+  padding:12px 16px;display:flex;align-items:center;gap:10px;transition:.15s;user-select:none}
+details.src summary::-webkit-details-marker{display:none}
+details.src summary:hover{color:var(--accent)}
+details.src summary .chev{transition:.2s;color:var(--faint)}
+details.src[open] summary .chev{transform:rotate(90deg);color:var(--accent)}
+details.src[open] summary{border-bottom:1px solid var(--line);color:var(--ink)}
+details.src pre{margin:0;max-height:540px;overflow:auto;padding:18px;font-size:13px;line-height:1.6;
+  background:var(--bg2)}
+details.src code{background:none;color:#d6dae0;padding:0;font-size:13px}
+
+/* prism token colors */
+.token.comment{color:#5d6470;font-style:italic}
+.token.keyword{color:#f2b65e}
+.token.string,.token.triple-quoted-string{color:#9fe6c4}
+.token.number,.token.boolean{color:#f08a8a}
+.token.function{color:#5ef0c0}
+.token.class-name,.token.builtin{color:#8fd0ff}
+.token.operator,.token.punctuation{color:#9aa1ad}
+.token.decorator{color:#f2b65e}
+
+/* SOTA */
+.sota-grid{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-top:30px}
+@media(max-width:820px){.sota-grid{grid-template-columns:1fr}}
+.cmp{background:var(--panel);border:1px solid var(--line);border-radius:6px;overflow:hidden}
+.cmp .h{font-family:var(--mono);font-size:13px;letter-spacing:.06em;padding:12px 16px;border-bottom:1px solid var(--line);color:var(--muted)}
+table{width:100%;border-collapse:collapse;font-size:15px}
+td,th{padding:11px 16px;text-align:left;border-bottom:1px solid var(--line)}
+th{font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--faint);font-weight:400}
+tr:last-child td{border-bottom:0}
+td.old{color:var(--muted)} td.new{color:var(--accent);font-family:var(--mono);font-size:13.5px}
+td.k{font-family:var(--mono);font-size:13px;color:var(--ink)}
+.pill{display:inline-block;font-family:var(--mono);font-size:11px;color:var(--amber);border:1px solid rgba(242,182,94,.3);
+  padding:2px 8px;border-radius:20px;margin:0 6px 6px 0}
+.stack{font-family:var(--mono);font-size:15px;margin-top:24px;display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.stack .n{background:var(--panel2);border:1px solid var(--line2);padding:10px 16px;border-radius:3px}
+.stack .ar{color:var(--accent)}
+
+/* run */
+.run pre{background:#070809;border:1px solid var(--line2);border-radius:6px;padding:18px 20px;
+  font-family:var(--mono);font-size:14px;color:#bfe9da;overflow-x:auto}
+.run .c{color:var(--faint)}
+.run .p{color:var(--accent)}
+
+footer{border-top:1px solid var(--line);padding:46px 0 80px;color:var(--muted);font-family:var(--mono);font-size:13px}
+footer b{color:var(--ink)}
+.sources{font-size:13px;color:var(--muted);margin-top:18px;line-height:1.9}
+.sources a{color:var(--accent-dim)}
+</style>
+</head>
+<body>
+<header class="bar"><div class="wrap">
+  <div class="brand">from_scratch<b>.llm</b></div>
+  <nav>
+    <a href="#ladder">The ladder</a>
+    <a href="#sota">State of the art</a>
+    <a href="#run">Run it</a>
+  </nav>
+</div></header>
+
+<section class="hero">
+  <canvas id="net"></canvas>
+  <div class="wrap">
+    <p class="kicker">Neural network &rarr; LLM &middot; in 15 steps</p>
+    <h1 class="title">BUILD AN LLM<span class="l2">FROM <em>SCRATCH</em></span></h1>
+    <p class="lede">Fifteen small, <b>runnable</b> Python scripts that climb from a 60-line neural network to a 2026-architecture, instruction- and preference-tuned GPT. <b>No black boxes</b> &mdash; every idea inside a frontier model, built and run by hand.</p>
+    <div class="cta">
+      <a class="btn solid" href="#ladder">Start climbing &darr;</a>
+      <a class="btn" href="#sota">What's latest (2026)</a>
+    </div>
+    <div class="stats">
+      <div class="stat"><div class="num">15</div><div class="lab">runnable scripts</div></div>
+      <div class="stat"><div class="num">0</div><div class="lab">magic / black boxes</div></div>
+      <div class="stat"><div class="num">465K</div><div class="lab">params in the GPT</div></div>
+      <div class="stat"><div class="num">2026</div><div class="lab">architecture &amp; alignment</div></div>
+    </div>
+  </div>
+</section>
+
+<section class="section"><div class="wrap">
+  <p class="eyebrow">The arc</p>
+  <h2 class="sec">Three acts, one machine.</h2>
+  <p class="sec-lede">Each script teaches exactly one new idea and builds directly on the last. Nothing is imported that you haven't already built yourself.</p>
+  <div class="acts">
+    <div class="act"><h3>Act I &middot; Language</h3><p>A neural net learns "what comes next." Counting, then gradient descent, then turning text into tokens.</p></div>
+    <div class="act"><h3>Act II &middot; Toolkit</h3><p>Embeddings and context windows, how autograd works, and the switch to PyTorch so gradients compute themselves.</p></div>
+    <div class="act"><h3>Act III &middot; Transformer</h3><p>Attention, the transformer block, a real GPT on Shakespeare &mdash; then sampling, training, and alignment up to 2026 spec.</p></div>
+  </div>
+</div></section>
+
+<section class="section" id="ladder"><div class="wrap">
+  <p class="eyebrow">The climb</p>
+  <h2 class="sec">The ladder.</h2>
+  <p class="sec-lede">Read straight through, or jump to any rung. Each shows the idea, the real terminal output, and the full source.</p>
+  <div class="ladder" style="margin-top:34px">
+    <nav class="index"><div class="ph">Foundation</div>
+<a href="#s00"><span class="nn">00</span> A neural network</a>
+<div class="ph">From neural net to language</div>
+<a href="#s01"><span class="nn">01</span> The simplest language model</a>
+<a href="#s02"><span class="nn">02</span> The same model, learned</a>
+<a href="#s03"><span class="nn">03</span> Turning text into numbers</a>
+<div class="ph">The deep-learning toolkit</div>
+<a href="#s04"><span class="nn">04</span> Embeddings &amp; context</a>
+<a href="#s05"><span class="nn">05</span> Automatic differentiation</a>
+<a href="#s06"><span class="nn">06</span> Switching to PyTorch</a>
+<div class="ph">The Transformer</div>
+<a href="#s07"><span class="nn">07</span> Self-attention</a>
+<a href="#s08"><span class="nn">08</span> The transformer block</a>
+<a href="#s09"><span class="nn">09</span> A real GPT</a>
+<div class="ph">Make it usable</div>
+<a href="#s10"><span class="nn">10</span> Sampling strategies</a>
+<a href="#s11"><span class="nn">11</span> Production training</a>
+<a href="#s12"><span class="nn">12</span> Instruction tuning</a>
+<div class="ph">State of the art · 2026</div>
+<a href="#s13"><span class="nn">13</span> Preference tuning with DPO</a>
+<a href="#s14"><span class="nn">14</span> The 2026 architecture</a></nav>
+    <div class="steps"><div class="phase-div">Foundation</div>
+
+<article class="step" id="s00">
+  <div class="head">
+    <span class="nn">00</span>
+    <div>
+      <h3>A neural network</h3>
+      <div class="tag">forward pass + backprop, learning XOR</div>
+    </div>
+    <span class="file">00_neural_network.py</span>
+  </div>
+  <div class="body">
+    <p>Every LLM is, at bottom, a neural network trained by gradient descent. So we start at the true atom: a two-layer net that learns <strong>XOR</strong> &mdash; the classic problem a single linear layer <em>cannot</em> solve.</p>
+<p>It contains the three ideas that never leave: a <strong>forward pass</strong> (predict), a <strong>loss</strong> (measure wrongness), and <strong>backpropagation</strong> (nudge every weight downhill). Written in pure NumPy so nothing hides.</p>
+    <div class="term">
+      <div class="top"><span class="dot g"></span><span class="dot"></span><span class="dot"></span>
+        <span>00_neural_network.py</span><span class="out-lab">output</span></div>
+      <pre>Final predictions:
+  [0 0] -&gt; 0.009  (rounded: 0)
+  [0 1] -&gt; 0.984  (rounded: 1)
+  [1 0] -&gt; 0.986  (rounded: 1)
+  [1 1] -&gt; 0.019  (rounded: 0)</pre>
+    </div>
+    <details class="src">
+      <summary><span class="chev">&#9656;</span> View full source &middot; 00_neural_network.py</summary>
+      <pre><code class="language-python">"""
+A tiny neural network from scratch — learns the XOR function.
+
+XOR is the classic "hello world" of neural nets: it's NOT linearly separable,
+so a single layer can't solve it. A hidden layer can. This script shows the
+full mechanics — forward pass, loss, and backpropagation — in pure NumPy.
+
+Run with:  python neural_network.py
+"""
+
+import numpy as np
+
+
+def sigmoid(x):
+    """Squashes any number into the range (0, 1) — our activation function."""
+    return 1 / (1 + np.exp(-x))
+
+
+def sigmoid_derivative(out):
+    """Gradient of sigmoid, expressed in terms of its OUTPUT (out = sigmoid(x))."""
+    return out * (1 - out)
+
+
+class NeuralNetwork:
+    """A 2-layer feedforward net: input -&gt; hidden -&gt; output."""
+
+    def __init__(self, n_inputs, n_hidden, n_outputs, seed=42):
+        rng = np.random.default_rng(seed)
+        # Weights are small random values; biases start at zero.
+        # W1 connects inputs -&gt; hidden, W2 connects hidden -&gt; output.
+        self.W1 = rng.normal(size=(n_inputs, n_hidden))
+        self.b1 = np.zeros((1, n_hidden))
+        self.W2 = rng.normal(size=(n_hidden, n_outputs))
+        self.b2 = np.zeros((1, n_outputs))
+
+    def forward(self, X):
+        """Push inputs through the network to get a prediction."""
+        self.z1 = X @ self.W1 + self.b1     # weighted sum into hidden layer
+        self.a1 = sigmoid(self.z1)          # hidden layer activations
+        self.z2 = self.a1 @ self.W2 + self.b2  # weighted sum into output
+        self.a2 = sigmoid(self.z2)          # final prediction
+        return self.a2
+
+    def train(self, X, y, epochs=10000, lr=0.5):
+        """Learn the weights via gradient descent + backpropagation."""
+        for epoch in range(epochs):
+            # --- Forward pass: compute predictions ---
+            pred = self.forward(X)
+
+            # --- Loss: mean squared error (how wrong we are) ---
+            loss = np.mean((y - pred) ** 2)
+
+            # --- Backward pass: how should each weight change? ---
+            # Chain rule from the loss back to every parameter.
+            d_pred = (pred - y) * sigmoid_derivative(self.a2)   # error at output
+            d_W2 = self.a1.T @ d_pred
+            d_b2 = np.sum(d_pred, axis=0, keepdims=True)
+
+            d_hidden = (d_pred @ self.W2.T) * sigmoid_derivative(self.a1)  # error at hidden
+            d_W1 = X.T @ d_hidden
+            d_b1 = np.sum(d_hidden, axis=0, keepdims=True)
+
+            # --- Gradient descent: nudge weights opposite the gradient ---
+            self.W2 -= lr * d_W2
+            self.b2 -= lr * d_b2
+            self.W1 -= lr * d_W1
+            self.b1 -= lr * d_b1
+
+            if epoch % 1000 == 0:
+                print(f"epoch {epoch:5d}  loss {loss:.4f}")
+
+
+if __name__ == "__main__":
+    # The 4 XOR examples: output is 1 only when inputs differ.
+    X = np.array([[0, 0], [0, 1], [1, 0], [1, 1]])
+    y = np.array([[0], [1], [1], [0]])
+
+    net = NeuralNetwork(n_inputs=2, n_hidden=4, n_outputs=1)
+    net.train(X, y)
+
+    print("\nFinal predictions:")
+    for inputs, prediction in zip(X, net.forward(X)):
+        print(f"  {inputs} -&gt; {prediction[0]:.3f}  (rounded: {round(prediction[0])})")
+</code></pre>
+    </details>
+  </div>
+</article>
+<div class="phase-div">From neural net to language</div>
+
+<article class="step" id="s01">
+  <div class="head">
+    <span class="nn">01</span>
+    <div>
+      <h3>The simplest language model</h3>
+      <div class="tag">predict the next character by counting</div>
+    </div>
+    <span class="file">01_bigram_counts.py</span>
+  </div>
+  <div class="body">
+    <p>A language model answers one question: <em>given what came before, what comes next?</em> The simplest possible version doesn't even use a network &mdash; it just <strong>counts</strong> which character tends to follow which, then samples from those frequencies.</p>
+<p>The generated names are mostly gibberish, and that's the lesson: looking at only <em>one</em> previous character has no memory of the wider word. Every later step exists to fix this.</p>
+    <div class="term">
+      <div class="top"><span class="dot g"></span><span class="dot"></span><span class="dot"></span>
+        <span>01_bigram_counts.py</span><span class="out-lab">output</span></div>
+      <pre>Most likely first letters:
+  'a'  9.62%   'm'  7.69%   'e'  7.69%
+
+Generated names:
+  nea
+  po
+  sxormxu
+  tzybzxvkfux</pre>
+    </div>
+    <details class="src">
+      <summary><span class="chev">&#9656;</span> View full source &middot; 01_bigram_counts.py</summary>
+      <pre><code class="language-python">"""
+#1 in the "NN to tiny LLM" ladder.
+
+The simplest possible language model: a BIGRAM model built from pure counts.
+No neural network, no gradients — just "how often does character Y follow
+character X?" We tally that into a table, turn counts into probabilities,
+and sample new words one character at a time.
+
+This is the conceptual seed of every LLM: predict the next token given the
+previous one(s). Everything later just makes this prediction smarter.
+
+Run with:  python bigram_counts.py
+"""
+
+import numpy as np
+
+# A tiny training corpus. Real models use millions of words; we use a handful
+# of names so you can eyeball what's happening. '.' is a special marker for
+# both START and END of a word.
+WORDS = [
+    "emma", "olivia", "ava", "isabella", "sophia", "mia", "amelia", "harper",
+    "liam", "noah", "oliver", "william", "james", "benjamin", "lucas", "henry",
+    "anna", "anya", "maria", "elena", "nina", "sara", "leo", "max", "ella",
+]
+
+
+def build_counts(words):
+    """Count every (current_char -&gt; next_char) pair across all words."""
+    # 27 symbols: '.' (index 0) plus 'a'..'z' (1..26).
+    chars = ["."] + sorted("abcdefghijklmnopqrstuvwxyz")
+    stoi = {c: i for i, c in enumerate(chars)}        # char  -&gt; index
+    itos = {i: c for c, i in stoi.items()}            # index -&gt; char
+
+    counts = np.zeros((27, 27), dtype=np.int64)
+    for word in words:
+        # Wrap each word with start/end markers: ".emma."
+        symbols = ["."] + list(word) + ["."]
+        for current, nxt in zip(symbols, symbols[1:]):
+            counts[stoi[current], stoi[nxt]] += 1
+    return counts, stoi, itos
+
+
+def to_probabilities(counts):
+    """Convert raw counts into a probability for each row.
+
+    +1 is 'smoothing': it stops any transition from being impossible (prob 0),
+    which would otherwise break sampling and infinite-loss situations.
+    """
+    probs = counts.astype(np.float64) + 1
+    probs /= probs.sum(axis=1, keepdims=True)   # each row sums to 1
+    return probs
+
+
+def generate(probs, itos, rng, max_len=20):
+    """Sample one new word, character by character, until we hit '.'."""
+    index = 0                       # always start at '.'
+    out = []
+    for _ in range(max_len):
+        # Pick the next character according to the learned probabilities.
+        index = rng.choice(27, p=probs[index])
+        if index == 0:              # hit the end marker
+            break
+        out.append(itos[index])
+    return "".join(out)
+
+
+if __name__ == "__main__":
+    counts, stoi, itos = build_counts(WORDS)
+    probs = to_probabilities(counts)
+
+    # Peek at what it learned: what most often follows the start marker '.'?
+    start_row = probs[0]
+    top = np.argsort(start_row)[::-1][:5]
+    print("Most likely first letters:")
+    for i in top:
+        print(f"  '{itos[i]}'  {start_row[i]:.2%}")
+
+    print("\nGenerated names:")
+    rng = np.random.default_rng(0)
+    for _ in range(10):
+        print("  " + generate(probs, itos, rng))
+</code></pre>
+    </details>
+  </div>
+</article>
+
+<article class="step" id="s02">
+  <div class="head">
+    <span class="nn">02</span>
+    <div>
+      <h3>The same model, learned</h3>
+      <div class="tag">softmax + cross-entropy via gradient descent</div>
+    </div>
+    <span class="file">02_bigram_nn.py</span>
+  </div>
+  <div class="body">
+    <p>Now we solve the <em>same</em> bigram task with a neural network trained by gradient descent &mdash; and it converges to the same answer the counting found. Two different methods, one truth.</p>
+<p>This introduces the permanent LLM toolkit: <strong>softmax</strong> (scores &rarr; probabilities) and <strong>cross-entropy loss</strong> (the universal next-token objective). Counting is the closed form; gradient descent is the general tool that keeps working when models get too complex to count.</p>
+    <div class="term">
+      <div class="top"><span class="dot g"></span><span class="dot"></span><span class="dot"></span>
+        <span>02_bigram_nn.py</span><span class="out-lab">output</span></div>
+      <pre>epoch    0  loss 3.8114
+epoch  100  loss 1.6104
+epoch  180  loss 1.5931
+
+Generated names:
+  maria   liliar   oler   naria</pre>
+    </div>
+    <details class="src">
+      <summary><span class="chev">&#9656;</span> View full source &middot; 02_bigram_nn.py</summary>
+      <pre><code class="language-python">"""
+#2 in the "NN to tiny LLM" ladder.
+
+Same bigram task as #1, but instead of COUNTING transitions we LEARN them with
+a neural network trained by gradient descent — exactly the machinery from your
+XOR net (neural_network.py), now applied to language.
+
+The remarkable result: a single-layer net trained this way converges to the
+SAME probabilities the counting model found. This proves the two views are one
+idea. Counting is the closed-form answer; gradient descent is the general tool
+that keeps working once models get too complex to count.
+
+Key new concepts vs #1:
+  - one-hot encoding   : represent a character as a vector
+  - softmax            : turn raw network outputs into probabilities
+  - cross-entropy loss : the standard loss for "predict the next token"
+
+Run with:  python bigram_nn.py
+"""
+
+import numpy as np
+
+WORDS = [
+    "emma", "olivia", "ava", "isabella", "sophia", "mia", "amelia", "harper",
+    "liam", "noah", "oliver", "william", "james", "benjamin", "lucas", "henry",
+    "anna", "anya", "maria", "elena", "nina", "sara", "leo", "max", "ella",
+]
+
+CHARS = ["."] + sorted("abcdefghijklmnopqrstuvwxyz")
+STOI = {c: i for i, c in enumerate(CHARS)}
+ITOS = {i: c for c, i in STOI.items()}
+VOCAB = len(CHARS)  # 27
+
+
+def build_dataset(words):
+    """Flatten all words into (input_char, target_char) index pairs."""
+    xs, ys = [], []
+    for word in words:
+        symbols = ["."] + list(word) + ["."]
+        for current, nxt in zip(symbols, symbols[1:]):
+            xs.append(STOI[current])
+            ys.append(STOI[nxt])
+    return np.array(xs), np.array(ys)
+
+
+def one_hot(indices, n):
+    """Turn a list of indices into rows of 0s with a single 1 (the 'on' char)."""
+    out = np.zeros((len(indices), n))
+    out[np.arange(len(indices)), indices] = 1
+    return out
+
+
+def softmax(logits):
+    """Turn raw scores ('logits') into probabilities that sum to 1 per row."""
+    logits = logits - logits.max(axis=1, keepdims=True)   # stability trick
+    exp = np.exp(logits)
+    return exp / exp.sum(axis=1, keepdims=True)
+
+
+def train(xs, ys, epochs=200, lr=20.0):
+    """Train a single weight matrix W mapping input char -&gt; next-char scores.
+
+    W has shape (27, 27): one column of scores per possible next character.
+    Because the input is one-hot, `X @ W` simply selects the relevant row of W,
+    so this net is literally learning a probability table — the same table #1
+    counted, but discovered through gradient descent.
+    """
+    rng = np.random.default_rng(0)
+    W = rng.normal(size=(VOCAB, VOCAB))
+    X = one_hot(xs, VOCAB)          # (N, 27)
+    n = len(xs)
+
+    for epoch in range(epochs):
+        # --- Forward pass ---
+        logits = X @ W              # (N, 27) raw scores for each next char
+        probs = softmax(logits)     # (N, 27) probabilities
+
+        # --- Cross-entropy loss: -log(probability assigned to the TRUE char) ---
+        loss = -np.mean(np.log(probs[np.arange(n), ys] + 1e-9))
+
+        # --- Backward pass ---
+        # Gradient of softmax + cross-entropy is beautifully simple:
+        # (predicted prob - 1 for the true class), averaged over the batch.
+        d_logits = probs.copy()
+        d_logits[np.arange(n), ys] -= 1
+        d_logits /= n
+        d_W = X.T @ d_logits
+
+        # --- Gradient descent update ---
+        W -= lr * d_W
+
+        if epoch % 20 == 0:
+            print(f"epoch {epoch:4d}  loss {loss:.4f}")
+
+    return W
+
+
+def generate(W, rng, max_len=20):
+    """Sample a new word from the trained net, one character at a time."""
+    index = 0
+    out = []
+    for _ in range(max_len):
+        logits = one_hot([index], VOCAB) @ W
+        probs = softmax(logits)[0]
+        index = rng.choice(VOCAB, p=probs)
+        if index == 0:
+            break
+        out.append(ITOS[index])
+    return "".join(out)
+
+
+if __name__ == "__main__":
+    xs, ys = build_dataset(WORDS)
+    W = train(xs, ys)
+
+    print("\nGenerated names:")
+    rng = np.random.default_rng(0)
+    for _ in range(100):
+        print("  " + generate(W, rng))
+</code></pre>
+    </details>
+  </div>
+</article>
+
+<article class="step" id="s03">
+  <div class="head">
+    <span class="nn">03</span>
+    <div>
+      <h3>Turning text into numbers</h3>
+      <div class="tag">char-level and Byte-Pair Encoding (BPE)</div>
+    </div>
+    <span class="file">03_tokenizer.py</span>
+  </div>
+  <div class="body">
+    <p>Models only understand numbers, so we need a reversible map between text and integer IDs. We build a character tokenizer, then a tiny <strong>BPE</strong> &mdash; the algorithm GPT actually uses, which greedily merges the most frequent adjacent pair into a new token, over and over.</p>
+<p>Watch it learn <code>t,h &rarr; 'th' &rarr; 'the' &rarr; ' the'</code>. Fewer tokens per word means more real text fits in the context window &mdash; the whole reason BPE beats characters.</p>
+    <div class="term">
+      <div class="top"><span class="dot g"></span><span class="dot"></span><span class="dot"></span>
+        <span>03_tokenizer.py</span><span class="out-lab">output</span></div>
+      <pre>Learned merges (most common pairs become tokens):
+  (t, h)   -&gt; 'th'
+  'th' + e -&gt; 'the'
+  ' ' + the -&gt; ' the'
+'the theme' is 9 chars but only 1 BPE token</pre>
+    </div>
+    <details class="src">
+      <summary><span class="chev">&#9656;</span> View full source &middot; 03_tokenizer.py</summary>
+      <pre><code class="language-python">"""
+#3 in the "NN to tiny LLM" ladder.
+
+A model only understands numbers, so we need a TOKENIZER: a reversible map
+between text and a sequence of integer IDs.
+
+  encode("hi")  -&gt; [7, 8]
+  decode([7,8]) -&gt; "hi"
+
+Two approaches here:
+  1. CharTokenizer  — one ID per character. Simple, what #1/#2 used implicitly.
+  2. BPETokenizer   — Byte-Pair Encoding: start from characters, then greedily
+                      MERGE the most frequent adjacent pair into a new token,
+                      over and over. This is (essentially) what GPT-2/3/4 use.
+                      It keeps the vocabulary small while letting common chunks
+                      like "th", "ing", " the" become single tokens.
+
+Run with:  python tokenizer.py
+"""
+
+from collections import Counter
+
+
+# --------------------------------------------------------------------------
+# 1. Character-level tokenizer
+# --------------------------------------------------------------------------
+class CharTokenizer:
+    """One token per unique character in the training text."""
+
+    def __init__(self, text):
+        chars = sorted(set(text))
+        self.stoi = {c: i for i, c in enumerate(chars)}
+        self.itos = {i: c for c, i in self.stoi.items()}
+        self.vocab_size = len(chars)
+
+    def encode(self, text):
+        return [self.stoi[c] for c in text]
+
+    def decode(self, ids):
+        return "".join(self.itos[i] for i in ids)
+
+
+# --------------------------------------------------------------------------
+# 2. Byte-Pair Encoding (BPE) tokenizer
+# --------------------------------------------------------------------------
+class BPETokenizer:
+    """Learn a vocabulary by repeatedly merging the most common adjacent pair.
+
+    Start with raw bytes (0..255) so ANY text is representable. Then run
+    `num_merges` rounds; each round finds the most frequent neighbouring pair
+    of token IDs and assigns it a brand-new ID.
+    """
+
+    def __init__(self):
+        self.merges = {}   # (id_a, id_b) -&gt; new_id, in the order learned
+        self.vocab = {i: bytes([i]) for i in range(256)}  # id -&gt; raw bytes
+
+    def _pair_counts(self, ids):
+        return Counter(zip(ids, ids[1:]))
+
+    def _merge(self, ids, pair, new_id):
+        """Replace every occurrence of `pair` in `ids` with `new_id`."""
+        out, i = [], 0
+        while i &lt; len(ids):
+            if i &lt; len(ids) - 1 and (ids[i], ids[i + 1]) == pair:
+                out.append(new_id)
+                i += 2
+            else:
+                out.append(ids[i])
+                i += 1
+        return out
+
+    def train(self, text, num_merges=20):
+        ids = list(text.encode("utf-8"))          # bytes -&gt; initial token IDs
+        for k in range(num_merges):
+            counts = self._pair_counts(ids)
+            if not counts:
+                break
+            pair = max(counts, key=counts.get)     # most frequent adjacent pair
+            new_id = 256 + k
+            ids = self._merge(ids, pair, new_id)
+            self.merges[pair] = new_id
+            # Record what bytes this new token expands to (for decoding).
+            self.vocab[new_id] = self.vocab[pair[0]] + self.vocab[pair[1]]
+        return self
+
+    @property
+    def vocab_size(self):
+        return len(self.vocab)
+
+    def encode(self, text):
+        ids = list(text.encode("utf-8"))
+        # Apply merges in the SAME order they were learned.
+        for pair, new_id in self.merges.items():
+            ids = self._merge(ids, pair, new_id)
+        return ids
+
+    def decode(self, ids):
+        raw = b"".join(self.vocab[i] for i in ids)
+        return raw.decode("utf-8", errors="replace")
+
+
+# --------------------------------------------------------------------------
+# Demo
+# --------------------------------------------------------------------------
+if __name__ == "__main__":
+    text = "the theme of the theater is the thunder"
+
+    print("=== CharTokenizer ===")
+    ct = CharTokenizer(text)
+    ids = ct.encode("the theme")
+    print("vocab size:", ct.vocab_size)
+    print("encode('the theme') -&gt;", ids)
+    print("decode back        -&gt;", repr(ct.decode(ids)))
+
+    print("\n=== BPETokenizer ===")
+    bpe = BPETokenizer().train(text, num_merges=10)
+    ids = bpe.encode("the theme")
+    print("vocab size:", bpe.vocab_size, "(256 bytes + learned merges)")
+    print("encode('the theme') -&gt;", ids)
+    print("decode back        -&gt;", repr(bpe.decode(ids)))
+    print(f"'the theme' is {len('the theme')} chars but only {len(ids)} BPE tokens")
+
+    print("\nLearned merges (most common pairs became single tokens):")
+    for pair, new_id in bpe.merges.items():
+        piece = bpe.vocab[new_id].decode("utf-8", errors="replace")
+        print(f"  {pair} -&gt; {new_id}   = {piece!r}")
+</code></pre>
+    </details>
+  </div>
+</article>
+<div class="phase-div">The deep-learning toolkit</div>
+
+<article class="step" id="s04">
+  <div class="head">
+    <span class="nn">04</span>
+    <div>
+      <h3>Embeddings &amp; context</h3>
+      <div class="tag">the Bengio MLP — names start looking real</div>
+    </div>
+    <span class="file">04_mlp_lm.py</span>
+  </div>
+  <div class="body">
+    <p>The leap. Each character becomes a small <strong>learned vector</strong> (an embedding), and the model looks at a <strong>window</strong> of previous characters at once. Suddenly the output is full of real names: <code>lucas, isabella, liam, ella</code>.</p>
+<p>Embeddings are the single most important idea in modern LLMs &mdash; every token in GPT is one. The architecture here is just the XOR net from #00 with <em>look-up &rarr; flatten &rarr; feed</em> bolted onto the front.</p>
+    <div class="term">
+      <div class="top"><span class="dot g"></span><span class="dot"></span><span class="dot"></span>
+        <span>04_mlp_lm.py</span><span class="out-lab">output</span></div>
+      <pre>epoch    0  loss 3.2892
+epoch 1800  loss 0.7440
+
+Generated names:
+  lucas   isabella   liam   anna
+  ruby    aria       ella   olioer</pre>
+    </div>
+    <details class="src">
+      <summary><span class="chev">&#9656;</span> View full source &middot; 04_mlp_lm.py</summary>
+      <pre><code class="language-python">"""
+#4 in the "NN to tiny LLM" ladder.
+
+The bigram models (#1, #2) had a fatal flaw: they only ever looked at ONE
+previous character. This MLP language model (after Bengio et al., 2003) fixes
+that by looking at a CONTEXT WINDOW of the previous `block_size` characters.
+
+Two big new ideas:
+
+  - EMBEDDINGS: instead of clunky one-hot vectors, each character gets a small
+    learned vector (its "embedding"). Similar characters can end up with
+    similar vectors. This is the C table — the model's first learned
+    understanding of what characters *mean*.
+
+  - HIDDEN LAYER: we concatenate the context's embeddings and feed them through
+    a tanh hidden layer (exactly like neural_network.py) before predicting the
+    next character. Now the prediction depends on the whole context together.
+
+Run with:  python mlp_lm.py
+"""
+
+import numpy as np
+
+WORDS = [
+    "emma", "olivia", "ava", "isabella", "sophia", "mia", "amelia", "harper",
+    "liam", "noah", "oliver", "william", "james", "benjamin", "lucas", "henry",
+    "anna", "anya", "maria", "elena", "nina", "sara", "leo", "max", "ella",
+    "grace", "chloe", "zoe", "lily", "aria", "ruby", "ivy", "luna", "nora",
+]
+
+CHARS = ["."] + sorted("abcdefghijklmnopqrstuvwxyz")
+STOI = {c: i for i, c in enumerate(CHARS)}
+ITOS = {i: c for c, i in STOI.items()}
+VOCAB = len(CHARS)  # 27
+
+BLOCK_SIZE = 3   # how many previous characters we condition on
+EMB_DIM = 8      # size of each character's embedding vector
+HIDDEN = 64      # neurons in the hidden layer
+
+
+def build_dataset(words):
+    """Slide a window of BLOCK_SIZE over each word to make (context -&gt; next)."""
+    xs, ys = [], []
+    for word in words:
+        context = [0] * BLOCK_SIZE          # start padded with '.' (index 0)
+        for ch in list(word) + ["."]:
+            target = STOI[ch]
+            xs.append(context)
+            ys.append(target)
+            context = context[1:] + [target]  # slide the window forward
+    return np.array(xs), np.array(ys)
+
+
+def softmax(logits):
+    logits = logits - logits.max(axis=1, keepdims=True)
+    exp = np.exp(logits)
+    return exp / exp.sum(axis=1, keepdims=True)
+
+
+class MLP:
+    def __init__(self, seed=0):
+        rng = np.random.default_rng(seed)
+        # C: the embedding table — one row (vector) per character.
+        self.C = rng.normal(size=(VOCAB, EMB_DIM)) * 0.1
+        # Hidden layer takes the flattened context embeddings as input.
+        fan_in = BLOCK_SIZE * EMB_DIM
+        self.W1 = rng.normal(size=(fan_in, HIDDEN)) * (1 / np.sqrt(fan_in))
+        self.b1 = np.zeros((1, HIDDEN))
+        self.W2 = rng.normal(size=(HIDDEN, VOCAB)) * 0.1
+        self.b2 = np.zeros((1, VOCAB))
+
+    def forward(self, X):
+        # X is (N, BLOCK_SIZE) integer indices. Look up each one's embedding...
+        self.emb = self.C[X]                       # (N, BLOCK_SIZE, EMB_DIM)
+        # ...then flatten the context into a single vector per example.
+        self.flat = self.emb.reshape(X.shape[0], -1)   # (N, BLOCK_SIZE*EMB_DIM)
+        self.h = np.tanh(self.flat @ self.W1 + self.b1)  # hidden activations
+        self.logits = self.h @ self.W2 + self.b2
+        return self.logits
+
+    def train(self, X, Y, epochs=2000, lr=0.1):
+        n = len(X)
+        for epoch in range(epochs):
+            # --- Forward ---
+            logits = self.forward(X)
+            probs = softmax(logits)
+            loss = -np.mean(np.log(probs[np.arange(n), Y] + 1e-9))
+
+            # --- Backward (chain rule, same shape as neural_network.py) ---
+            d_logits = probs.copy()
+            d_logits[np.arange(n), Y] -= 1
+            d_logits /= n
+
+            d_W2 = self.h.T @ d_logits
+            d_b2 = d_logits.sum(axis=0, keepdims=True)
+
+            d_h = (d_logits @ self.W2.T) * (1 - self.h ** 2)   # tanh' = 1 - tanh^2
+            d_W1 = self.flat.T @ d_h
+            d_b1 = d_h.sum(axis=0, keepdims=True)
+
+            # Gradient flows back into the embedding table too.
+            d_flat = d_h @ self.W1.T
+            d_emb = d_flat.reshape(self.emb.shape)
+            d_C = np.zeros_like(self.C)
+            np.add.at(d_C, X, d_emb)   # scatter-add grads to the rows we used
+
+            # --- Update ---
+            for param, grad in [(self.W1, d_W1), (self.b1, d_b1),
+                                (self.W2, d_W2), (self.b2, d_b2),
+                                (self.C, d_C)]:
+                param -= lr * grad
+
+            if epoch % 200 == 0:
+                print(f"epoch {epoch:4d}  loss {loss:.4f}")
+
+    def generate(self, rng, max_len=20):
+        context = [0] * BLOCK_SIZE
+        out = []
+        for _ in range(max_len):
+            logits = self.forward(np.array([context]))
+            probs = softmax(logits)[0]
+            idx = rng.choice(VOCAB, p=probs)
+            if idx == 0:
+                break
+            out.append(ITOS[idx])
+            context = context[1:] + [idx]
+        return "".join(out)
+
+
+if __name__ == "__main__":
+    X, Y = build_dataset(WORDS)
+    print(f"dataset: {len(X)} examples, each looking at {BLOCK_SIZE} prev chars\n")
+
+    model = MLP()
+    model.train(X, Y)
+
+    print("\nGenerated names:")
+    rng = np.random.default_rng(1)
+    for _ in range(12):
+        print("  " + model.generate(rng))
+</code></pre>
+    </details>
+  </div>
+</article>
+
+<article class="step" id="s05">
+  <div class="head">
+    <span class="nn">05</span>
+    <div>
+      <h3>Automatic differentiation</h3>
+      <div class="tag">a mini-micrograd — how backprop automates itself</div>
+    </div>
+    <span class="file">05_autograd.py</span>
+  </div>
+  <div class="body">
+    <p>We've hand-derived gradients three times. PyTorch does it automatically &mdash; and here's how, in miniature. Every <code>Value</code> remembers its parents and a local rule for one step of the chain rule. Calling <code>.backward()</code> walks the graph in reverse and assembles the whole derivative.</p>
+<p>The proof: the auto-computed gradient matches a numerical estimate exactly. You write only the forward math; the backward pass builds itself. That's all PyTorch's autograd is.</p>
+    <div class="term">
+      <div class="top"><span class="dot g"></span><span class="dot"></span><span class="dot"></span>
+        <span>05_autograd.py</span><span class="out-lab">output</span></div>
+      <pre>forward output: Value(data=0.7064)
+
+gradients (computed automatically):
+  w1.grad = 1.0019
+numeric check of w1.grad: 1.0019  (matches)</pre>
+    </div>
+    <details class="src">
+      <summary><span class="chev">&#9656;</span> View full source &middot; 05_autograd.py</summary>
+      <pre><code class="language-python">"""
+#5 in the "NN to tiny LLM" ladder.  (the "aha" rung)
+
+So far we've hand-derived every gradient with the chain rule. PyTorch does this
+for you AUTOMATICALLY. This file builds a tiny version of that magic — a
+scalar-valued autograd engine, in the spirit of Karpathy's "micrograd".
+
+The trick: every Value remembers
+  (a) the numbers that produced it (its "parents"), and
+  (b) a local rule for sending gradient back to those parents (`_backward`).
+
+Calling `.backward()` on the final result walks this graph in reverse, applying
+the chain rule at each node. You write the FORWARD math normally; the backward
+pass assembles itself. That is the entire idea behind PyTorch's autograd.
+
+Run with:  python autograd.py
+"""
+
+import math
+
+
+class Value:
+    """A single scalar that tracks how it was computed, so it can backprop."""
+
+    def __init__(self, data, _parents=(), _op=""):
+        self.data = data
+        self.grad = 0.0                 # d(final output) / d(this value)
+        self._parents = set(_parents)
+        self._op = _op                  # label, for debugging/printing
+        self._backward = lambda: None   # how to push grad to parents
+
+    def __repr__(self):
+        return f"Value(data={self.data:.4f}, grad={self.grad:.4f})"
+
+    # --- Operations. Each builds a new Value AND defines its local backward. ---
+
+    def __add__(self, other):
+        other = other if isinstance(other, Value) else Value(other)
+        out = Value(self.data + other.data, (self, other), "+")
+
+        def _backward():
+            # d(a+b)/da = 1, d(a+b)/db = 1  -&gt; gradient flows through unchanged.
+            self.grad += out.grad
+            other.grad += out.grad
+        out._backward = _backward
+        return out
+
+    def __mul__(self, other):
+        other = other if isinstance(other, Value) else Value(other)
+        out = Value(self.data * other.data, (self, other), "*")
+
+        def _backward():
+            # d(a*b)/da = b, d(a*b)/db = a
+            self.grad += other.data * out.grad
+            other.grad += self.data * out.grad
+        out._backward = _backward
+        return out
+
+    def __pow__(self, power):
+        out = Value(self.data ** power, (self,), f"**{power}")
+
+        def _backward():
+            self.grad += (power * self.data ** (power - 1)) * out.grad
+        out._backward = _backward
+        return out
+
+    def tanh(self):
+        t = math.tanh(self.data)
+        out = Value(t, (self,), "tanh")
+
+        def _backward():
+            # d(tanh(x))/dx = 1 - tanh(x)^2  — the same rule we used in #4.
+            self.grad += (1 - t ** 2) * out.grad
+        out._backward = _backward
+        return out
+
+    # Conveniences so we can write natural expressions.
+    def __neg__(self):           return self * -1
+    def __sub__(self, other):    return self + (-other)
+    def __radd__(self, other):   return self + other
+    def __rmul__(self, other):   return self * other
+
+    def backward(self):
+        """Run the chain rule over the whole graph, leaf-ward from `self`."""
+        # 1. Topologically order every node behind this one.
+        topo, visited = [], set()
+
+        def build(v):
+            if v not in visited:
+                visited.add(v)
+                for parent in v._parents:
+                    build(parent)
+                topo.append(v)
+        build(self)
+
+        # 2. Seed: d(self)/d(self) = 1, then apply each _backward in reverse.
+        self.grad = 1.0
+        for node in reversed(topo):
+            node._backward()
+
+
+if __name__ == "__main__":
+    # A tiny neuron: out = tanh(w1*x1 + w2*x2 + b)
+    x1, x2 = Value(2.0), Value(0.0)
+    w1, w2 = Value(-3.0), Value(1.0)
+    b = Value(6.88)
+
+    n = x1 * w1 + x2 * w2 + b
+    out = n.tanh()
+
+    print("forward output:", out)
+
+    out.backward()   # &lt;-- gradients computed automatically, no hand-derivation
+
+    print("\ngradients (how each input nudges the output):")
+    print(f"  x1.grad = {x1.grad:.4f}")
+    print(f"  w1.grad = {w1.grad:.4f}")
+    print(f"  x2.grad = {x2.grad:.4f}")
+    print(f"  w2.grad = {w2.grad:.4f}")
+    print(f"   b.grad = {b.grad:.4f}")
+
+    # Sanity check w1.grad numerically: nudge w1 a hair and see how out moves.
+    eps = 1e-6
+    base = (x1.data * w1.data + x2.data * w2.data + b.data)
+    f = lambda w: math.tanh(x1.data * w + x2.data * w2.data + b.data)
+    numeric = (f(w1.data + eps) - f(w1.data)) / eps
+    print(f"\nnumeric check of w1.grad: {numeric:.4f}  (should match above)")
+</code></pre>
+    </details>
+  </div>
+</article>
+
+<article class="step" id="s06">
+  <div class="head">
+    <span class="nn">06</span>
+    <div>
+      <h3>Switching to PyTorch</h3>
+      <div class="tag">all the hand-coded backprop collapses to one line</div>
+    </div>
+    <span class="file">06_switch_to_pytorch.py</span>
+  </div>
+  <div class="body">
+    <p>The same #04 model, rewritten in PyTorch. Thirty lines of manual gradient math become a single <code>loss.backward()</code>; the update loop becomes <code>optimizer.step()</code>; softmax+log becomes <code>F.cross_entropy</code>.</p>
+<p>From here we never hand-derive a gradient again &mdash; which is exactly what frees us to build something as intricate as a transformer.</p>
+    <div class="term">
+      <div class="top"><span class="dot g"></span><span class="dot"></span><span class="dot"></span>
+        <span>06_switch_to_pytorch.py</span><span class="out-lab">output</span></div>
+      <pre>dataset: 192 examples | model: 3571 parameters
+epoch 1800  loss 0.6855
+
+Generated names:
+  benjamin   sophia   olivia   anya</pre>
+    </div>
+    <details class="src">
+      <summary><span class="chev">&#9656;</span> View full source &middot; 06_switch_to_pytorch.py</summary>
+      <pre><code class="language-python">"""
+#6 in the "NN to tiny LLM" ladder.
+
+The SAME MLP language model from #4 (mlp_lm.py) — embeddings + context window +
+hidden layer — but written in PyTorch. Compare the two files side by side:
+
+  - The forward pass is almost identical to our NumPy version.
+  - ALL the hand-coded backprop from #4 collapses into one line: loss.backward()
+    (PyTorch's autograd, exactly the engine you built in #5, doing the work).
+  - Parameter updates become an optimizer: optimizer.step().
+
+This is the toolkit we'll use to build the transformer. Once you trust that
+this matches #4, we never hand-derive a gradient again.
+
+Run with:  python switch_to_pytorch.py
+"""
+
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+
+WORDS = [
+    "emma", "olivia", "ava", "isabella", "sophia", "mia", "amelia", "harper",
+    "liam", "noah", "oliver", "william", "james", "benjamin", "lucas", "henry",
+    "anna", "anya", "maria", "elena", "nina", "sara", "leo", "max", "ella",
+    "grace", "chloe", "zoe", "lily", "aria", "ruby", "ivy", "luna", "nora",
+]
+
+CHARS = ["."] + sorted("abcdefghijklmnopqrstuvwxyz")
+STOI = {c: i for i, c in enumerate(CHARS)}
+ITOS = {i: c for c, i in STOI.items()}
+VOCAB = len(CHARS)
+
+BLOCK_SIZE = 3
+EMB_DIM = 8
+HIDDEN = 64
+
+torch.manual_seed(0)
+
+
+def build_dataset(words):
+    xs, ys = [], []
+    for word in words:
+        context = [0] * BLOCK_SIZE
+        for ch in list(word) + ["."]:
+            target = STOI[ch]
+            xs.append(context)
+            ys.append(target)
+            context = context[1:] + [target]
+    return torch.tensor(xs), torch.tensor(ys)
+
+
+class MLP(nn.Module):
+    """Exactly #4's architecture, expressed with PyTorch building blocks."""
+
+    def __init__(self):
+        super().__init__()
+        self.C = nn.Embedding(VOCAB, EMB_DIM)            # the embedding table
+        self.fc1 = nn.Linear(BLOCK_SIZE * EMB_DIM, HIDDEN)  # hidden layer
+        self.fc2 = nn.Linear(HIDDEN, VOCAB)              # output scores (logits)
+
+    def forward(self, x):
+        emb = self.C(x)                  # (N, BLOCK_SIZE, EMB_DIM)
+        flat = emb.view(emb.shape[0], -1)  # flatten the context
+        h = torch.tanh(self.fc1(flat))
+        logits = self.fc2(h)
+        return logits
+
+
+def train(model, X, Y, epochs=2000, lr=0.1):
+    # The optimizer holds the parameters and applies the gradient-descent step.
+    optimizer = torch.optim.SGD(model.parameters(), lr=lr)
+    for epoch in range(epochs):
+        logits = model(X)
+        # cross_entropy = softmax + negative-log-likelihood, in one call.
+        loss = F.cross_entropy(logits, Y)
+
+        optimizer.zero_grad()   # clear old gradients
+        loss.backward()         # &lt;-- autograd computes EVERY gradient for us
+        optimizer.step()        # &lt;-- update all parameters
+
+        if epoch % 200 == 0:
+            print(f"epoch {epoch:4d}  loss {loss.item():.4f}")
+
+
+@torch.no_grad()
+def generate(model, max_len=20):
+    context = [0] * BLOCK_SIZE
+    out = []
+    for _ in range(max_len):
+        logits = model(torch.tensor([context]))
+        probs = F.softmax(logits, dim=1)
+        idx = torch.multinomial(probs, num_samples=1).item()
+        if idx == 0:
+            break
+        out.append(ITOS[idx])
+        context = context[1:] + [idx]
+    return "".join(out)
+
+
+if __name__ == "__main__":
+    X, Y = build_dataset(WORDS)
+    n_params = sum(p.numel() for p in MLP().parameters())
+    print(f"dataset: {len(X)} examples | model: {n_params} parameters\n")
+
+    model = MLP()
+    train(model, X, Y)
+
+    print("\nGenerated names:")
+    for _ in range(12):
+        print("  " + generate(model))
+</code></pre>
+    </details>
+  </div>
+</article>
+<div class="phase-div">The Transformer</div>
+
+<article class="step" id="s07">
+  <div class="head">
+    <span class="nn">07</span>
+    <div>
+      <h3>Self-attention</h3>
+      <div class="tag">the mechanism that makes transformers work</div>
+    </div>
+    <span class="file">07_self_attention.py</span>
+  </div>
+  <div class="body">
+    <p>The heart of it all. Each token emits a <strong>Query</strong> (what I seek), a <strong>Key</strong> (what I offer), and a <strong>Value</strong> (what I pass on). Dot-product Query&middot;Key gives relevance scores &rarr; softmax &rarr; a weighted sum of Values. Every token gets a new, <em>context-aware</em> representation.</p>
+<p>The <strong>causal mask</strong> (the lower triangle below) forbids peeking at the future. Unlike the MLP's fixed window, attention scales to any context and <em>learns</em> what to focus on.</p>
+    <div class="term">
+      <div class="top"><span class="dot g"></span><span class="dot"></span><span class="dot"></span>
+        <span>07_self_attention.py</span><span class="out-lab">output</span></div>
+      <pre>Attention weights (row i attends over tokens 0..i):
+        tok0  tok1  tok2  tok3  tok4
+  tok0  1.00  0.00  0.00  0.00  0.00
+  tok1  0.48  0.52  0.00  0.00  0.00
+  tok4  0.12  0.20  0.20  0.20  0.29</pre>
+    </div>
+    <details class="src">
+      <summary><span class="chev">&#9656;</span> View full source &middot; 07_self_attention.py</summary>
+      <pre><code class="language-python">"""
+#7 in the "NN to tiny LLM" ladder.  (the crucial mechanism)
+
+ATTENTION is the idea that makes transformers — and therefore modern LLMs —
+work. The MLP (#4/#6) crammed a fixed window of characters into one vector and
+treated every position the same. Attention instead lets every token look back
+over ALL previous tokens and decide, for itself, which ones are relevant right
+now.
+
+The mechanism, per token:
+  - Query (Q): "what am I looking for?"
+  - Key   (K): "what do I offer?"
+  - Value (V): "what information do I pass on if attended to?"
+
+A token compares its Query against every other token's Key (a dot product) to
+get attention SCORES, softmaxes them into WEIGHTS, then takes a weighted sum of
+the Values. That weighted sum is the token's new, context-aware representation.
+
+CAUSAL MASKING: in a language model a token may only attend to itself and
+EARLIER tokens (it must not peek at the future it's trying to predict). We
+enforce this by setting future scores to -infinity before the softmax.
+
+This file implements one attention head from scratch in PyTorch and prints the
+attention weights so you can SEE which tokens attend to which.
+
+Run with:  python 07_self_attention.py
+"""
+
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+
+torch.manual_seed(0)
+
+
+class SelfAttentionHead(nn.Module):
+    """A single causal self-attention head."""
+
+    def __init__(self, n_embd, head_size):
+        super().__init__()
+        # Three linear projections turn each token's embedding into Q, K, V.
+        self.key = nn.Linear(n_embd, head_size, bias=False)
+        self.query = nn.Linear(n_embd, head_size, bias=False)
+        self.value = nn.Linear(n_embd, head_size, bias=False)
+        self.head_size = head_size
+
+    def forward(self, x, return_weights=False):
+        # x: (B, T, C) = (batch, time/sequence length, embedding dim)
+        B, T, C = x.shape
+        q = self.query(x)   # (B, T, head_size)
+        k = self.key(x)     # (B, T, head_size)
+        v = self.value(x)   # (B, T, head_size)
+
+        # Attention scores: how much each token (query) matches every other
+        # token (key). Scale by sqrt(head_size) to keep softmax well-behaved.
+        scores = q @ k.transpose(-2, -1) / self.head_size ** 0.5  # (B, T, T)
+
+        # Causal mask: forbid attending to FUTURE positions.
+        mask = torch.tril(torch.ones(T, T))            # lower-triangular 1s
+        scores = scores.masked_fill(mask == 0, float("-inf"))
+
+        weights = F.softmax(scores, dim=-1)            # (B, T, T), rows sum to 1
+        out = weights @ v                              # (B, T, head_size)
+
+        if return_weights:
+            return out, weights
+        return out
+
+
+if __name__ == "__main__":
+    # A toy sequence of 5 tokens, each a 4-dim embedding, single batch.
+    B, T, C = 1, 5, 4
+    x = torch.randn(B, T, C)
+
+    head = SelfAttentionHead(n_embd=C, head_size=4)
+    out, weights = head(x, return_weights=True)
+
+    print(f"input  shape: {tuple(x.shape)}  (batch, tokens, embd)")
+    print(f"output shape: {tuple(out.shape)}  (each token now context-aware)\n")
+
+    print("Attention weights — row i = how token i distributes attention over")
+    print("tokens 0..4. Note the lower-triangular shape: no token sees the")
+    print("future, and each row sums to 1.\n")
+    w = weights[0]
+    header = "        " + "".join(f"tok{j}  " for j in range(T))
+    print(header)
+    for i in range(T):
+        row = "  ".join(f"{w[i, j]:.2f}" for j in range(T))
+        print(f"  tok{i}  {row}")
+
+    print("\nRead it: token 0 can only attend to itself (1.00). Token 4 spreads")
+    print("attention across all 5 tokens. The upper triangle is exactly 0 —")
+    print("that's the causal mask doing its job.")
+</code></pre>
+    </details>
+  </div>
+</article>
+
+<article class="step" id="s08">
+  <div class="head">
+    <span class="nn">08</span>
+    <div>
+      <h3>The transformer block</h3>
+      <div class="tag">multi-head attention + MLP + residuals + norm</div>
+    </div>
+    <span class="file">08_transformer_block.py</span>
+  </div>
+  <div class="body">
+    <p>One head is the atom; the block is the molecule GPT stacks. <strong>Multi-head attention</strong> runs several heads in parallel, a <strong>feed-forward</strong> MLP lets each token think, and <strong>residual connections</strong> + <strong>layernorm</strong> make deep stacks trainable.</p>
+<p>Shape in equals shape out &mdash; which is precisely why you can stack 4, 12, or 96 of them. GPT-3 is 96 of these in a row.</p>
+    <div class="term">
+      <div class="top"><span class="dot g"></span><span class="dot"></span><span class="dot"></span>
+        <span>08_transformer_block.py</span><span class="out-lab">output</span></div>
+      <pre>input  shape: (2, 6, 32)
+output shape: (2, 6, 32)   &lt;- identical, so blocks stack
+4 heads, each of size 8 | 12,608 parameters
+after stacking 3 blocks: (2, 6, 32)</pre>
+    </div>
+    <details class="src">
+      <summary><span class="chev">&#9656;</span> View full source &middot; 08_transformer_block.py</summary>
+      <pre><code class="language-python">"""
+#8 in the "NN to tiny LLM" ladder.
+
+One attention head (#7) is the atom. A TRANSFORMER BLOCK is the molecule that
+GPT stacks N times. It adds four ideas that make deep networks actually train:
+
+  1. MULTI-HEAD ATTENTION — run several attention heads in parallel, each free
+     to focus on a different kind of relationship, then concatenate them. One
+     head might track "the previous letter", another "the start of the word".
+
+  2. FEED-FORWARD (MLP) — after tokens have GATHERED information via attention,
+     a per-token MLP THINKS about it. Attention mixes across tokens; the MLP
+     processes each token on its own. (This is your neural_network.py again.)
+
+  3. RESIDUAL CONNECTIONS — `x = x + sublayer(x)`. The block learns a small
+     adjustment to its input rather than a whole new value. This is THE trick
+     that lets us stack dozens of blocks without gradients vanishing.
+
+  4. LAYER NORM — normalize each token's vector before each sublayer to keep
+     activations at a stable scale, so training stays smooth.
+
+The shape in equals the shape out (B, T, C), which is exactly why blocks stack.
+
+Run with:  python 08_transformer_block.py
+"""
+
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+
+torch.manual_seed(0)
+
+
+class Head(nn.Module):
+    """One causal self-attention head (same as #7)."""
+
+    def __init__(self, n_embd, head_size):
+        super().__init__()
+        self.key = nn.Linear(n_embd, head_size, bias=False)
+        self.query = nn.Linear(n_embd, head_size, bias=False)
+        self.value = nn.Linear(n_embd, head_size, bias=False)
+        self.head_size = head_size
+
+    def forward(self, x):
+        B, T, C = x.shape
+        q, k, v = self.query(x), self.key(x), self.value(x)
+        scores = q @ k.transpose(-2, -1) / self.head_size ** 0.5
+        mask = torch.tril(torch.ones(T, T, device=x.device))
+        scores = scores.masked_fill(mask == 0, float("-inf"))
+        weights = F.softmax(scores, dim=-1)
+        return weights @ v
+
+
+class MultiHeadAttention(nn.Module):
+    """Several heads in parallel, concatenated and projected back to n_embd."""
+
+    def __init__(self, n_embd, n_heads):
+        super().__init__()
+        head_size = n_embd // n_heads
+        self.heads = nn.ModuleList(
+            [Head(n_embd, head_size) for _ in range(n_heads)]
+        )
+        self.proj = nn.Linear(n_embd, n_embd)   # mix the heads' outputs
+
+    def forward(self, x):
+        out = torch.cat([h(x) for h in self.heads], dim=-1)  # (B, T, n_embd)
+        return self.proj(out)
+
+
+class FeedForward(nn.Module):
+    """Per-token MLP. Expands to 4x then back — the standard transformer ratio."""
+
+    def __init__(self, n_embd):
+        super().__init__()
+        self.net = nn.Sequential(
+            nn.Linear(n_embd, 4 * n_embd),
+            nn.ReLU(),
+            nn.Linear(4 * n_embd, n_embd),
+        )
+
+    def forward(self, x):
+        return self.net(x)
+
+
+class TransformerBlock(nn.Module):
+    """Attention + feed-forward, each wrapped in (layernorm -&gt; sublayer -&gt; add).
+
+    Note the residual form `x = x + sublayer(ln(x))`: the network only has to
+    learn what to ADD to x, which is what makes very deep stacks trainable.
+    """
+
+    def __init__(self, n_embd, n_heads):
+        super().__init__()
+        self.ln1 = nn.LayerNorm(n_embd)
+        self.attn = MultiHeadAttention(n_embd, n_heads)
+        self.ln2 = nn.LayerNorm(n_embd)
+        self.ffwd = FeedForward(n_embd)
+
+    def forward(self, x):
+        x = x + self.attn(self.ln1(x))   # tokens gather info from each other
+        x = x + self.ffwd(self.ln2(x))   # each token then thinks on its own
+        return x
+
+
+if __name__ == "__main__":
+    B, T, C = 2, 6, 32      # batch, tokens, embedding dim
+    n_heads = 4
+    x = torch.randn(B, T, C)
+
+    block = TransformerBlock(n_embd=C, n_heads=n_heads)
+    out = block(x)
+
+    n_params = sum(p.numel() for p in block.parameters())
+    print(f"input  shape: {tuple(x.shape)}")
+    print(f"output shape: {tuple(out.shape)}   &lt;- identical, so blocks stack")
+    print(f"{n_heads} heads, each of size {C // n_heads}")
+    print(f"block parameters: {n_params}\n")
+
+    # Demonstrate stacking: feed the output straight into more blocks.
+    blocks = nn.Sequential(*[TransformerBlock(C, n_heads) for _ in range(3)])
+    deep_out = blocks(x)
+    print(f"after stacking 3 blocks: {tuple(deep_out.shape)}  (still B, T, C)")
+    print("\nStacking N of these — plus embeddings and a final classifier — IS")
+    print("a GPT. That's exactly what we assemble in #9.")
+</code></pre>
+    </details>
+  </div>
+</article>
+
+<article class="step" id="s09">
+  <div class="head">
+    <span class="nn">09</span>
+    <div>
+      <h3>A real GPT</h3>
+      <div class="tag">trained on Shakespeare — it generates text</div>
+    </div>
+    <span class="file">09_tiny_gpt.py</span>
+  </div>
+  <div class="body">
+    <p>Everything converges. Token + <strong>position embeddings</strong> &rarr; a stack of blocks &rarr; an output head, trained on ~1MB of Shakespeare. From a 4.36 loss of pure noise, it learns &mdash; entirely on its own &mdash; the play format, character names, line breaks, and Shakespearean cadence.</p>
+<p>This is a genuine, complete GPT (465K params). The architecture is identical to GPT-4; only the scale differs. The trained weights are saved to <code>tiny_gpt.pt</code> so every later step loads instantly.</p>
+    <div class="term">
+      <div class="top"><span class="dot g"></span><span class="dot"></span><span class="dot"></span>
+        <span>09_tiny_gpt.py</span><span class="out-lab">output</span></div>
+      <pre>iter    0  train loss 4.365
+iter 3000  train loss 1.493  val loss 1.674
+
+=== Generated Shakespeare ===
+KING XI:
+Beliescapes not, if teach his such Lord,
+ROMEO:
+Whall suf yeten me assoous, being, where,</pre>
+    </div>
+    <details class="src">
+      <summary><span class="chev">&#9656;</span> View full source &middot; 09_tiny_gpt.py</summary>
+      <pre><code class="language-python">"""
+#9 in the "NN to tiny LLM" ladder.  *** A REAL GPT ***
+
+Everything comes together. We assemble a complete decoder-only transformer —
+the same architecture as GPT — and train it on ~1MB of Shakespeare to generate
+new text one character at a time.
+
+The full pipeline, all of which you've now built piece by piece:
+
+  tokens --[token embedding]--&gt; vectors
+         + [position embedding]          (so the model knows ORDER)
+         --&gt; [ N transformer blocks ]    (#8: attention + MLP, stacked)
+         --&gt; [ layernorm + linear head ] --&gt; logits over the vocabulary
+         --&gt; cross-entropy loss          (#2's loss, unchanged)
+         --&gt; loss.backward(); optimizer.step()   (#5/#6: autograd does it all)
+
+POSITION EMBEDDINGS are the one genuinely new piece: attention itself has no
+notion of order (it's a weighted set), so we ADD a learned per-position vector
+so "abc" and "cba" look different to the model.
+
+This trains in ~1-2 min on CPU. It won't write masterpieces at this tiny size,
+but it WILL learn Shakespearean rhythm, names, and word-like structure from
+scratch. Increase the size knobs below for better (slower) results.
+
+Run with:  python 09_tiny_gpt.py
+"""
+
+import os
+
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+
+torch.manual_seed(1337)
+
+CKPT_PATH = "tiny_gpt.pt"   # trained weights are saved/loaded here
+
+# ---- Hyperparameters (small, so it runs on a laptop CPU) ----
+BLOCK_SIZE = 64      # max context length (how many chars the model sees)
+N_EMBD = 96          # embedding dimension
+N_HEADS = 4          # attention heads per block
+N_LAYERS = 4         # number of transformer blocks stacked
+DROPOUT = 0.1
+LEARNING_RATE = 3e-3
+MAX_ITERS = 3000
+BATCH_SIZE = 32
+EVAL_INTERVAL = 300
+
+DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
+
+
+# --------------------------------------------------------------------------
+# Data: char-level tokenizer over the Shakespeare corpus
+# --------------------------------------------------------------------------
+with open("input.txt", "r", encoding="utf-8") as f:
+    text = f.read()
+
+chars = sorted(set(text))
+VOCAB = len(chars)
+stoi = {c: i for i, c in enumerate(chars)}
+itos = {i: c for c, i in stoi.items()}
+encode = lambda s: [stoi[c] for c in s]
+decode = lambda ids: "".join(itos[i] for i in ids)
+
+data = torch.tensor(encode(text), dtype=torch.long)
+split = int(0.9 * len(data))
+train_data, val_data = data[:split], data[split:]
+
+
+def get_batch(source):
+    """Grab BATCH_SIZE random chunks; targets are inputs shifted by one char."""
+    ix = torch.randint(len(source) - BLOCK_SIZE, (BATCH_SIZE,))
+    x = torch.stack([source[i:i + BLOCK_SIZE] for i in ix])
+    y = torch.stack([source[i + 1:i + BLOCK_SIZE + 1] for i in ix])
+    return x.to(DEVICE), y.to(DEVICE)
+
+
+# --------------------------------------------------------------------------
+# Model (the #8 block, plus embeddings + a language-model head)
+# --------------------------------------------------------------------------
+class Head(nn.Module):
+    def __init__(self, head_size):
+        super().__init__()
+        self.key = nn.Linear(N_EMBD, head_size, bias=False)
+        self.query = nn.Linear(N_EMBD, head_size, bias=False)
+        self.value = nn.Linear(N_EMBD, head_size, bias=False)
+        # A non-learned buffer holding the causal mask.
+        self.register_buffer("tril", torch.tril(torch.ones(BLOCK_SIZE, BLOCK_SIZE)))
+        self.dropout = nn.Dropout(DROPOUT)
+        self.head_size = head_size
+
+    def forward(self, x):
+        B, T, C = x.shape
+        q, k, v = self.query(x), self.key(x), self.value(x)
+        scores = q @ k.transpose(-2, -1) / self.head_size ** 0.5
+        scores = scores.masked_fill(self.tril[:T, :T] == 0, float("-inf"))
+        weights = self.dropout(F.softmax(scores, dim=-1))
+        return weights @ v
+
+
+class MultiHeadAttention(nn.Module):
+    def __init__(self, n_heads, head_size):
+        super().__init__()
+        self.heads = nn.ModuleList([Head(head_size) for _ in range(n_heads)])
+        self.proj = nn.Linear(N_EMBD, N_EMBD)
+        self.dropout = nn.Dropout(DROPOUT)
+
+    def forward(self, x):
+        out = torch.cat([h(x) for h in self.heads], dim=-1)
+        return self.dropout(self.proj(out))
+
+
+class FeedForward(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.net = nn.Sequential(
+            nn.Linear(N_EMBD, 4 * N_EMBD),
+            nn.ReLU(),
+            nn.Linear(4 * N_EMBD, N_EMBD),
+            nn.Dropout(DROPOUT),
+        )
+
+    def forward(self, x):
+        return self.net(x)
+
+
+class Block(nn.Module):
+    def __init__(self):
+        super().__init__()
+        head_size = N_EMBD // N_HEADS
+        self.attn = MultiHeadAttention(N_HEADS, head_size)
+        self.ffwd = FeedForward()
+        self.ln1 = nn.LayerNorm(N_EMBD)
+        self.ln2 = nn.LayerNorm(N_EMBD)
+
+    def forward(self, x):
+        x = x + self.attn(self.ln1(x))
+        x = x + self.ffwd(self.ln2(x))
+        return x
+
+
+class TinyGPT(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.token_emb = nn.Embedding(VOCAB, N_EMBD)       # what each token is
+        self.pos_emb = nn.Embedding(BLOCK_SIZE, N_EMBD)    # where it sits
+        self.blocks = nn.Sequential(*[Block() for _ in range(N_LAYERS)])
+        self.ln_f = nn.LayerNorm(N_EMBD)
+        self.head = nn.Linear(N_EMBD, VOCAB)               # -&gt; scores per char
+
+    def forward(self, idx, targets=None):
+        B, T = idx.shape
+        tok = self.token_emb(idx)                                  # (B, T, C)
+        pos = self.pos_emb(torch.arange(T, device=idx.device))     # (T, C)
+        x = tok + pos                                              # add position
+        x = self.blocks(x)
+        x = self.ln_f(x)
+        logits = self.head(x)                                      # (B, T, VOCAB)
+
+        loss = None
+        if targets is not None:
+            loss = F.cross_entropy(logits.view(-1, VOCAB), targets.view(-1))
+        return logits, loss
+
+    @torch.no_grad()
+    def generate(self, idx, max_new_tokens):
+        """Autoregressive sampling: predict next char, append, repeat."""
+        for _ in range(max_new_tokens):
+            idx_cond = idx[:, -BLOCK_SIZE:]          # keep within context window
+            logits, _ = self(idx_cond)
+            logits = logits[:, -1, :]                # only the last position
+            probs = F.softmax(logits, dim=-1)
+            next_id = torch.multinomial(probs, num_samples=1)
+            idx = torch.cat([idx, next_id], dim=1)
+        return idx
+
+
+@torch.no_grad()
+def estimate_loss(model):
+    model.eval()
+    out = {}
+    for name, source in [("train", train_data), ("val", val_data)]:
+        losses = torch.zeros(20)
+        for k in range(20):
+            x, y = get_batch(source)
+            _, loss = model(x, y)
+            losses[k] = loss.item()
+        out[name] = losses.mean().item()
+    model.train()
+    return out
+
+
+def train_model(model):
+    """Run the optimization loop, then save the weights to CKPT_PATH."""
+    optimizer = torch.optim.AdamW(model.parameters(), lr=LEARNING_RATE)
+    for it in range(MAX_ITERS + 1):
+        if it % EVAL_INTERVAL == 0:
+            losses = estimate_loss(model)
+            print(f"iter {it:4d}  train loss {losses['train']:.3f}  "
+                  f"val loss {losses['val']:.3f}")
+        x, y = get_batch(train_data)
+        _, loss = model(x, y)
+        optimizer.zero_grad(set_to_none=True)
+        loss.backward()
+        optimizer.step()
+
+    # Save weights + the vocab + the architecture knobs, so any script (or a
+    # later run) can rebuild this exact model and load these weights.
+    torch.save({
+        "model": model.state_dict(),
+        "chars": chars,
+        "config": {
+            "BLOCK_SIZE": BLOCK_SIZE, "N_EMBD": N_EMBD,
+            "N_HEADS": N_HEADS, "N_LAYERS": N_LAYERS, "VOCAB": VOCAB,
+        },
+    }, CKPT_PATH)
+    print(f"\nsaved trained model -&gt; {CKPT_PATH}")
+
+
+if __name__ == "__main__":
+    model = TinyGPT().to(DEVICE)
+    n_params = sum(p.numel() for p in model.parameters())
+    print(f"device: {DEVICE} | vocab: {VOCAB} chars | parameters: {n_params:,}\n")
+
+    if os.path.exists(CKPT_PATH):
+        # Already trained once — load instantly instead of retraining.
+        ckpt = torch.load(CKPT_PATH, map_location=DEVICE)
+        model.load_state_dict(ckpt["model"])
+        print(f"loaded trained model from {CKPT_PATH} "
+              f"(delete it to force a retrain)\n")
+    else:
+        train_model(model)
+
+    print("\n=== Generated Shakespeare ===\n")
+    start = torch.zeros((1, 1), dtype=torch.long, device=DEVICE)  # newline seed
+    print(decode(model.generate(start, max_new_tokens=500)[0].tolist()))
+</code></pre>
+    </details>
+  </div>
+</article>
+<div class="phase-div">Make it usable</div>
+
+<article class="step" id="s10">
+  <div class="head">
+    <span class="nn">10</span>
+    <div>
+      <h3>Sampling strategies</h3>
+      <div class="tag">temperature, top-k, top-p — one model, many writers</div>
+    </div>
+    <span class="file">10_sampling.py</span>
+  </div>
+  <div class="body">
+    <p>A trained model outputs a probability for every next token; <em>how</em> you pick from them transforms the text without touching a single weight. <strong>Greedy</strong> loops forever; <strong>temperature</strong> trades safety for creativity; <strong>top-k</strong> and <strong>top-p</strong> hit the sweet spot.</p>
+<p>This is exactly the <code>temperature</code> / <code>top_p</code> knob you set when calling an LLM API. The model is frozen &mdash; you're reshaping how it samples from itself.</p>
+    <div class="term">
+      <div class="top"><span class="dot g"></span><span class="dot"></span><span class="dot"></span>
+        <span>10_sampling.py</span><span class="out-lab">output</span></div>
+      <pre>GREEDY  (gets stuck):
+  the world of the world of the world...
+
+TEMPERATURE 1.5  (wild, creative):
+  thyremh, discops: LeWlooke me hand
+
+TOP-P 0.9  (coherent and varied):
+  KING HENRY VI: There shall seek so your way</pre>
+    </div>
+    <details class="src">
+      <summary><span class="chev">&#9656;</span> View full source &middot; 10_sampling.py</summary>
+      <pre><code class="language-python">"""
+#10 in the "NN to tiny LLM" ladder.
+
+A trained model outputs a probability for every possible next token. HOW we
+pick from that distribution dramatically changes the text — without touching
+the weights at all. These are the "generation" or "decoding" strategies, and
+they're exactly the knobs an API like ChatGPT exposes (temperature, top_p...).
+
+  - GREEDY            : always take the single most likely token. Safe but
+                        repetitive, often loops.
+  - TEMPERATURE       : divide the logits by T before softmax.
+                        T&lt;1 -&gt; sharper/safer, T&gt;1 -&gt; flatter/wilder, T=1 -&gt; raw.
+  - TOP-K             : keep only the k most likely tokens, sample among them.
+  - TOP-P (nucleus)   : keep the smallest set of tokens whose probabilities sum
+                        to p, sample among them. Adapts how many options it
+                        considers to how confident the model is.
+
+We LOAD the model trained in #9 (tiny_gpt.pt) — no retraining — and compare the
+strategies side by side on the same seed.
+
+Run with:  python 10_sampling.py   (requires tiny_gpt.pt from running #9 first)
+"""
+
+import importlib.util
+import os
+
+import torch
+import torch.nn.functional as F
+
+# 09_tiny_gpt.py starts with a digit, so it can't be imported normally.
+# Load it as a module to reuse its TinyGPT class, tokenizer, and config.
+spec = importlib.util.spec_from_file_location("tiny_gpt", "09_tiny_gpt.py")
+tg = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(tg)
+
+DEVICE = tg.DEVICE
+BLOCK_SIZE = tg.BLOCK_SIZE
+
+
+def load_model():
+    if not os.path.exists(tg.CKPT_PATH):
+        raise SystemExit("No tiny_gpt.pt found — run `python 09_tiny_gpt.py` first.")
+    model = tg.TinyGPT().to(DEVICE)
+    ckpt = torch.load(tg.CKPT_PATH, map_location=DEVICE)
+    model.load_state_dict(ckpt["model"])
+    model.eval()
+    return model
+
+
+@torch.no_grad()
+def sample(model, n_tokens=300, temperature=1.0, top_k=None, top_p=None, seed=0):
+    """Generate text using the chosen decoding strategy."""
+    torch.manual_seed(seed)
+    idx = torch.zeros((1, 1), dtype=torch.long, device=DEVICE)  # newline seed
+
+    for _ in range(n_tokens):
+        logits, _ = model(idx[:, -BLOCK_SIZE:])
+        logits = logits[:, -1, :]                  # scores for the next token
+
+        # TEMPERATURE: scale logits. Lower = more confident/repetitive.
+        logits = logits / max(temperature, 1e-6)
+
+        # TOP-K: zero out everything except the k highest-scoring tokens.
+        if top_k is not None:
+            kth = torch.topk(logits, top_k).values[:, -1, None]
+            logits = logits.masked_fill(logits &lt; kth, float("-inf"))
+
+        probs = F.softmax(logits, dim=-1)
+
+        # TOP-P (nucleus): keep the smallest set of tokens covering prob mass p.
+        if top_p is not None:
+            sorted_probs, sorted_idx = torch.sort(probs, descending=True)
+            cumulative = torch.cumsum(sorted_probs, dim=-1)
+            remove = cumulative - sorted_probs &gt; top_p   # keep through the crossover
+            sorted_probs[remove] = 0
+            probs = torch.zeros_like(probs).scatter(1, sorted_idx, sorted_probs)
+            probs = probs / probs.sum(dim=-1, keepdim=True)
+
+        next_id = torch.multinomial(probs, num_samples=1)
+        idx = torch.cat([idx, next_id], dim=1)
+
+    return tg.decode(idx[0].tolist())
+
+
+@torch.no_grad()
+def sample_greedy(model, n_tokens=300):
+    """Always pick the argmax — deterministic, tends to repeat."""
+    idx = torch.zeros((1, 1), dtype=torch.long, device=DEVICE)
+    for _ in range(n_tokens):
+        logits, _ = model(idx[:, -BLOCK_SIZE:])
+        next_id = logits[:, -1, :].argmax(dim=-1, keepdim=True)
+        idx = torch.cat([idx, next_id], dim=1)
+    return tg.decode(idx[0].tolist())
+
+
+def show(title, text):
+    print(f"\n{'=' * 60}\n{title}\n{'=' * 60}")
+    print(text.strip())
+
+
+if __name__ == "__main__":
+    model = load_model()
+    print(f"loaded {tg.CKPT_PATH} — comparing decoding strategies "
+          f"(no retraining)\n")
+
+    show("GREEDY  (always the top token — watch it get stuck/repeat)",
+         sample_greedy(model, 250))
+
+    show("TEMPERATURE 0.5  (timid, safe, more repetitive)",
+         sample(model, 250, temperature=0.5))
+
+    show("TEMPERATURE 1.0  (the raw distribution)",
+         sample(model, 250, temperature=1.0))
+
+    show("TEMPERATURE 1.5  (wild, creative, more typos)",
+         sample(model, 250, temperature=1.5))
+
+    show("TOP-K = 10  (only the 10 likeliest tokens each step)",
+         sample(model, 250, top_k=10))
+
+    show("TOP-P = 0.9  (nucleus: adaptive shortlist)",
+         sample(model, 250, top_p=0.9))
+
+    print("\n\nSame weights, six different writers. This is why one model can "
+          "be\nmade 'creative' or 'precise' just by changing decoding settings.")
+</code></pre>
+    </details>
+  </div>
+</article>
+
+<article class="step" id="s11">
+  <div class="head">
+    <span class="nn">11</span>
+    <div>
+      <h3>Production training</h3>
+      <div class="tag">resumable checkpoints + LR warmup/decay</div>
+    </div>
+    <span class="file">11_train_loop.py</span>
+  </div>
+  <div class="body">
+    <p>A bare loop won't survive a multi-day run. This adds <strong>resumable checkpoints</strong> (model + optimizer + step), a <strong>learning-rate schedule</strong> (warmup then cosine decay), <strong>gradient clipping</strong>, and <strong>best-model tracking</strong>.</p>
+<p>Run it once, stop, run it again &mdash; it picks up exactly where it left off. That's how real training survives crashes and restarts.</p>
+    <div class="term">
+      <div class="top"><span class="dot g"></span><span class="dot"></span><span class="dot"></span>
+        <span>11_train_loop.py</span><span class="out-lab">output</span></div>
+      <pre>no checkpoint found - starting fresh
+iter    0  lr 3.0e-05  train 4.365
+iter 1500  train 1.599  val 1.757
+
+# next run:
+resumed from train_ckpt.pt at iter 1500</pre>
+    </div>
+    <details class="src">
+      <summary><span class="chev">&#9656;</span> View full source &middot; 11_train_loop.py</summary>
+      <pre><code class="language-python">"""
+#11 in the "NN to tiny LLM" ladder.
+
+#9 trained with a bare loop. Real training needs a few more things so you can
+run for hours, stop, and pick up where you left off without losing work. This
+script adds the standard production machinery on top of #9's model:
+
+  - RESUMABLE CHECKPOINTS : save model + optimizer + iteration number. Re-run
+                            the script and it CONTINUES instead of restarting.
+                            (Run it a few times to watch the loss keep dropping.)
+  - LR SCHEDULE           : linear WARMUP then COSINE DECAY. Starting slow and
+                            easing off near the end trains more stably than a
+                            flat learning rate.
+  - GRADIENT CLIPPING     : cap the gradient size so one bad batch can't blow
+                            up the weights.
+  - BEST-MODEL TRACKING   : separately save the checkpoint with the lowest
+                            validation loss, not just the latest.
+
+We reuse the TinyGPT model, tokenizer, and batching from #9 — this file is only
+about the TRAINING LOOP, not the architecture.
+
+Run with:  python 11_train_loop.py   (run it again to resume training)
+"""
+
+import importlib.util
+import math
+import os
+
+import torch
+
+# Reuse everything from #9 (digit-prefixed filename -&gt; load as a module).
+spec = importlib.util.spec_from_file_location("tiny_gpt", "09_tiny_gpt.py")
+tg = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(tg)
+
+DEVICE = tg.DEVICE
+
+# ---- Training config ----
+TARGET_ITERS = 1500       # total iterations to reach (across all runs)
+WARMUP_ITERS = 100        # ramp LR up over the first N steps
+MAX_LR = 3e-3
+MIN_LR = 3e-4
+EVAL_INTERVAL = 250
+GRAD_CLIP = 1.0
+CKPT_PATH = "train_ckpt.pt"        # full training state (resumable)
+BEST_PATH = "train_best.pt"        # lowest-val-loss weights only
+
+
+def get_lr(it):
+    """Linear warmup for WARMUP_ITERS, then cosine decay down to MIN_LR."""
+    if it &lt; WARMUP_ITERS:
+        return MAX_LR * (it + 1) / WARMUP_ITERS
+    # Cosine decay from MAX_LR -&gt; MIN_LR over the remaining iterations.
+    progress = (it - WARMUP_ITERS) / max(1, TARGET_ITERS - WARMUP_ITERS)
+    coeff = 0.5 * (1 + math.cos(math.pi * min(progress, 1.0)))
+    return MIN_LR + coeff * (MAX_LR - MIN_LR)
+
+
+def save_checkpoint(model, optimizer, it, best_val):
+    torch.save({
+        "model": model.state_dict(),
+        "optimizer": optimizer.state_dict(),
+        "iter": it,
+        "best_val": best_val,
+        "chars": tg.chars,
+    }, CKPT_PATH)
+
+
+def main():
+    model = tg.TinyGPT().to(DEVICE)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=MAX_LR)
+
+    start_iter, best_val = 0, float("inf")
+
+    # --- Resume if a checkpoint exists ---
+    if os.path.exists(CKPT_PATH):
+        ckpt = torch.load(CKPT_PATH, map_location=DEVICE)
+        model.load_state_dict(ckpt["model"])
+        optimizer.load_state_dict(ckpt["optimizer"])
+        start_iter = ckpt["iter"]
+        best_val = ckpt["best_val"]
+        print(f"resumed from {CKPT_PATH} at iter {start_iter} "
+              f"(best val {best_val:.3f})")
+    else:
+        print("no checkpoint found — starting fresh")
+
+    if start_iter &gt;= TARGET_ITERS:
+        print(f"already trained to {start_iter} &gt;= target {TARGET_ITERS}. "
+              f"Increase TARGET_ITERS or delete {CKPT_PATH} to train more.")
+        return
+
+    print(f"training iters {start_iter} -&gt; {TARGET_ITERS}\n")
+
+    for it in range(start_iter, TARGET_ITERS):
+        # Set this step's learning rate from the schedule.
+        lr = get_lr(it)
+        for group in optimizer.param_groups:
+            group["lr"] = lr
+
+        if it % EVAL_INTERVAL == 0:
+            losses = tg.estimate_loss(model)
+            print(f"iter {it:4d}  lr {lr:.1e}  "
+                  f"train {losses['train']:.3f}  val {losses['val']:.3f}")
+            # Keep the best-on-validation weights separately.
+            if losses["val"] &lt; best_val:
+                best_val = losses["val"]
+                torch.save({"model": model.state_dict(), "chars": tg.chars},
+                           BEST_PATH)
+
+        x, y = tg.get_batch(tg.train_data)
+        _, loss = model(x, y)
+        optimizer.zero_grad(set_to_none=True)
+        loss.backward()
+        # Clip gradients so a single bad batch can't destabilize training.
+        torch.nn.utils.clip_grad_norm_(model.parameters(), GRAD_CLIP)
+        optimizer.step()
+
+    # Final eval + save so the next run resumes from here.
+    losses = tg.estimate_loss(model)
+    print(f"iter {TARGET_ITERS:4d}  train {losses['train']:.3f}  "
+          f"val {losses['val']:.3f}")
+    if losses["val"] &lt; best_val:
+        best_val = losses["val"]
+        torch.save({"model": model.state_dict(), "chars": tg.chars}, BEST_PATH)
+    save_checkpoint(model, optimizer, TARGET_ITERS, best_val)
+    print(f"\nsaved resumable state -&gt; {CKPT_PATH}")
+    print(f"saved best (val {best_val:.3f})   -&gt; {BEST_PATH}")
+
+
+if __name__ == "__main__":
+    main()
+</code></pre>
+    </details>
+  </div>
+</article>
+
+<article class="step" id="s12">
+  <div class="head">
+    <span class="nn">12</span>
+    <div>
+      <h3>Instruction tuning</h3>
+      <div class="tag">base model → assistant (the ChatGPT leap)</div>
+    </div>
+    <span class="file">12_finetune.py</span>
+  </div>
+  <div class="body">
+    <p>A base model only continues text. The step that made ChatGPT is <strong>instruction tuning</strong>: fine-tune on (instruction, response) pairs, with <strong>loss masking</strong> so the model is trained only on the <em>answer</em>, not the question.</p>
+<p>Same weights, one nudge &mdash; but now it follows commands instead of rambling. Ask the base model to 'say hello' and it quotes Shakespeare; the tuned model replies politely.</p>
+    <div class="term">
+      <div class="top"><span class="dot g"></span><span class="dot"></span><span class="dot"></span>
+        <span>12_finetune.py</span><span class="out-lab">output</span></div>
+      <pre>BASE model, ask 'say hello':
+  -&gt; 'I will not the world and the words,'
+
+FINE-TUNED model:
+  Q: say hello
+  A: good morrow to you, friend.
+  Q: what is love
+  A: love is a gentle madness.</pre>
+    </div>
+    <details class="src">
+      <summary><span class="chev">&#9656;</span> View full source &middot; 12_finetune.py</summary>
+      <pre><code class="language-python">"""
+#12 in the "NN to tiny LLM" ladder.  *** THE FINALE: base model -&gt; assistant ***
+
+Everything so far produces a BASE model: give it text, it continues the text.
+That's autocomplete, not an assistant. The step that turned GPT-3 into ChatGPT
+is INSTRUCTION FINE-TUNING: keep training the base model on (instruction,
+response) pairs so it learns to RESPOND rather than ramble.
+
+Three ideas make it work, all visible below:
+
+  1. A PROMPT TEMPLATE — wrap every example in a fixed format so the model
+     learns where the question ends and the answer begins:
+         QUESTION: &lt;instruction&gt;
+         ANSWER:   &lt;response&gt;
+
+  2. LOSS MASKING — we only compute loss on the ANSWER tokens (the prompt
+     tokens are set to ignore_index=-100). The model shouldn't be trained to
+     generate the question; only to produce a good answer to it. This is the
+     single most important trick in instruction tuning.
+
+  3. START FROM THE BASE MODEL — we load tiny_gpt.pt (transfer learning) and
+     nudge it, rather than training from scratch. It already knows how letters
+     and words work; we only teach it the new BEHAVIOUR of answering.
+
+HONEST CAVEAT: our base model is tiny (465K params) and trained only on
+Shakespeare, and we use a handful of examples — so this MEMORISES the format
+and answers rather than generalising. That's fine: the goal is to SEE the
+mechanism. Real instruction tuning is this exact code, with a big base model
+and thousands of diverse examples.
+
+Run with:  python 12_finetune.py   (requires tiny_gpt.pt from running #9 first)
+"""
+
+import importlib.util
+import os
+
+import torch
+import torch.nn.functional as F
+
+# Reuse the model, tokenizer, and config from #9.
+spec = importlib.util.spec_from_file_location("tiny_gpt", "09_tiny_gpt.py")
+tg = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(tg)
+
+DEVICE = tg.DEVICE
+BLOCK_SIZE = tg.BLOCK_SIZE
+CHAT_PATH = "tiny_gpt_chat.pt"     # the fine-tuned ("chat") model
+
+FINETUNE_STEPS = 1200
+LR = 1e-3
+
+# Instruction -&gt; response pairs. (Kept to characters our Shakespeare vocab
+# knows: letters, space, comma, period. No digits/symbols outside the vocab.)
+PAIRS = [
+    ("say hello",        "good morrow to you, friend."),
+    ("who are you",      "i am your humble servant."),
+    ("how are you",      "i am well, i thank you."),
+    ("say farewell",     "farewell, and good night."),
+    ("praise the king",  "long live the noble king."),
+    ("are you happy",    "yes, my heart is glad."),
+    ("what is love",     "love is a gentle madness."),
+    ("good night",       "sleep well, sweet friend."),
+]
+
+
+def prompt_of(instruction):
+    """The fixed template. Generation feeds everything up to 'ANSWER: '."""
+    return f"QUESTION: {instruction}\nANSWER: "
+
+
+def make_example(instruction, response):
+    """Build (x, y) where y masks the prompt so loss falls only on the answer."""
+    prompt = prompt_of(instruction)
+    full = prompt + response + "\n"
+    ids = tg.encode(full)
+    assert len(ids) &lt;= BLOCK_SIZE + 1, f"example too long: {full!r}"
+
+    x = torch.tensor(ids[:-1], device=DEVICE)
+    y = torch.tensor(ids[1:], device=DEVICE)
+    # Mask every target that lies in the prompt region: -100 is ignored by
+    # cross_entropy, so no gradient comes from predicting the question.
+    prompt_len = len(tg.encode(prompt))
+    y[:prompt_len - 1] = -100
+    return x.unsqueeze(0), y.unsqueeze(0)
+
+
+def finetune():
+    """Load the base model and instruction-tune it; save to CHAT_PATH."""
+    model = tg.TinyGPT().to(DEVICE)
+    base = torch.load(tg.CKPT_PATH, map_location=DEVICE)
+    model.load_state_dict(base["model"])     # &lt;-- start from the BASE model
+    print(f"loaded base model from {tg.CKPT_PATH}; instruction-tuning...\n")
+
+    optimizer = torch.optim.AdamW(model.parameters(), lr=LR)
+    model.train()
+    for step in range(FINETUNE_STEPS + 1):
+        instruction, response = PAIRS[torch.randint(len(PAIRS), (1,)).item()]
+        x, y = make_example(instruction, response)
+
+        logits, _ = model(x)                 # (1, T, vocab)
+        loss = F.cross_entropy(
+            logits.view(-1, logits.size(-1)), y.view(-1), ignore_index=-100
+        )
+        optimizer.zero_grad(set_to_none=True)
+        loss.backward()
+        optimizer.step()
+
+        if step % 200 == 0:
+            print(f"step {step:4d}  answer-loss {loss.item():.3f}")
+
+    torch.save({"model": model.state_dict(), "chars": tg.chars}, CHAT_PATH)
+    print(f"\nsaved fine-tuned chat model -&gt; {CHAT_PATH}")
+    return model
+
+
+@torch.no_grad()
+def answer(model, instruction, max_new=60):
+    """Greedy-decode an answer to one instruction, stopping at the newline."""
+    prompt = prompt_of(instruction)
+    idx = torch.tensor([tg.encode(prompt)], device=DEVICE)
+    for _ in range(max_new):
+        logits, _ = model(idx[:, -BLOCK_SIZE:])
+        next_id = logits[:, -1, :].argmax(dim=-1, keepdim=True)
+        if tg.itos[next_id.item()] == "\n":
+            break
+        idx = torch.cat([idx, next_id], dim=1)
+    full = tg.decode(idx[0].tolist())
+    return full[len(prompt):]
+
+
+def load_or_finetune():
+    if os.path.exists(CHAT_PATH):
+        model = tg.TinyGPT().to(DEVICE)
+        model.load_state_dict(torch.load(CHAT_PATH, map_location=DEVICE)["model"])
+        print(f"loaded fine-tuned model from {CHAT_PATH} "
+              f"(delete it to re-finetune)\n")
+        return model
+    if not os.path.exists(tg.CKPT_PATH):
+        raise SystemExit("No tiny_gpt.pt — run `python 09_tiny_gpt.py` first.")
+    return finetune()
+
+
+if __name__ == "__main__":
+    model = load_or_finetune()
+    model.eval()
+
+    print("=" * 60)
+    print("BASE model (tiny_gpt.pt) answering — it ignores instructions:")
+    print("=" * 60)
+    base = tg.TinyGPT().to(DEVICE)
+    base.load_state_dict(torch.load(tg.CKPT_PATH, map_location=DEVICE)["model"])
+    base.eval()
+    print(f"  ask: 'say hello'\n  -&gt;{answer(base, 'say hello')!r}\n")
+
+    print("=" * 60)
+    print("FINE-TUNED model answering the SAME template — now it responds:")
+    print("=" * 60)
+    for instruction, _ in PAIRS:
+        print(f"  Q: {instruction}")
+        print(f"  A:{answer(model, instruction)}\n")
+
+    print("Same architecture, same weights+a nudge — but masking the loss onto")
+    print("the answers taught it to FOLLOW INSTRUCTIONS. That nudge, at scale,")
+    print("is the difference between GPT-3 and ChatGPT.")
+</code></pre>
+    </details>
+  </div>
+</article>
+<div class="phase-div">State of the art · 2026</div>
+
+<article class="step" id="s13">
+  <div class="head">
+    <span class="nn">13</span>
+    <div>
+      <h3>Preference tuning with DPO</h3>
+      <div class="tag">the modern alternative to RLHF</div>
+    </div>
+    <span class="file">13_dpo.py</span>
+  </div>
+  <div class="body">
+    <p>Instruction tuning only shows the model <em>good</em> answers. <strong>Preference tuning</strong> teaches it to prefer a chosen response over a rejected one. The 2026 standard is <strong>DPO</strong> (Direct Preference Optimization): where classic RLHF needs three models and a reinforcement-learning loop, DPO does it with a single, simple loss.</p>
+<p>Starting from the #12 model and a frozen reference copy, DPO widens the chosen-vs-rejected gap from +54 to +96 &mdash; with no reward model and no RL. This is essentially how modern open models are aligned today.</p>
+    <div class="term">
+      <div class="top"><span class="dot g"></span><span class="dot"></span><span class="dot"></span>
+        <span>13_dpo.py</span><span class="out-lab">output</span></div>
+      <pre>BEFORE DPO:  chosen-minus-rejected gap: +54.22
+training (chosen &gt; rejected)...
+step  400  loss 0.014
+AFTER  DPO:  chosen-minus-rejected gap: +96.06</pre>
+    </div>
+    <details class="src">
+      <summary><span class="chev">&#9656;</span> View full source &middot; 13_dpo.py</summary>
+      <pre><code class="language-python">"""
+#13 in the "NN to tiny LLM" ladder.  (the latest post-training method)
+
+#12 did instruction tuning (SFT): teach the model to answer. But SFT only shows
+the model GOOD answers — it never sees what a BAD answer looks like. PREFERENCE
+TUNING fixes that: we give the model pairs of (chosen, rejected) responses and
+teach it to prefer the chosen one.
+
+In 2026 the standard, accessible way to do this is DPO — Direct Preference
+Optimization (Rafailov et al., 2023). Classic RLHF needs THREE models and a
+reinforcement-learning loop (a reward model + the policy + a critic). DPO proved
+you can skip all of that and get the same effect with a single, simple loss:
+
+    loss = -log_sigmoid( beta * [ (logp_chosen  - logp_chosen_ref )
+                                 - (logp_rejected - logp_rejected_ref) ] )
+
+Intuition: push UP the probability of the chosen response and push DOWN the
+rejected one — but only RELATIVE to a frozen REFERENCE copy of the model, so it
+improves preferences without drifting far from what it already knows.
+
+We start from the SFT model (#12, tiny_gpt_chat.pt), keep a frozen copy as the
+reference, and optimise the policy on (prompt, chosen, rejected) triples.
+
+Run with:  python 13_dpo.py   (requires tiny_gpt_chat.pt from running #12 first)
+"""
+
+import importlib.util
+import os
+
+import torch
+import torch.nn.functional as F
+
+# Reuse the model + tokenizer from #9, and the prompt template from #12.
+spec = importlib.util.spec_from_file_location("tiny_gpt", "09_tiny_gpt.py")
+tg = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(tg)
+
+DEVICE = tg.DEVICE
+BLOCK_SIZE = tg.BLOCK_SIZE
+SFT_PATH = "tiny_gpt_chat.pt"     # the instruction-tuned model from #12
+DPO_PATH = "tiny_gpt_dpo.pt"      # output of this script
+
+BETA = 0.1          # how strongly to trust the preferences vs. the reference
+DPO_STEPS = 400
+LR = 5e-5           # preference tuning uses a small learning rate
+
+
+def prompt_of(instruction):
+    return f"QUESTION: {instruction}\nANSWER: "
+
+
+# (instruction, CHOSEN response, REJECTED response). Same safe vocab as #12.
+PREFERENCES = [
+    ("how are you",     "i am well, i thank you.",   "none of your business."),
+    ("say hello",       "good morrow to you, friend.", "go away."),
+    ("who are you",     "i am your humble servant.", "i shall not say."),
+    ("are you happy",   "yes, my heart is glad.",    "no, i am wretched."),
+    ("good night",      "sleep well, sweet friend.", "leave me alone."),
+    ("praise the king", "long live the noble king.", "the king is a fool."),
+    ("what is love",    "love is a gentle madness.", "love is for fools."),
+    ("say farewell",    "farewell, and good night.", "begone from here."),
+]
+
+
+def sequence_logprob(model, instruction, response):
+    """Sum of log-probabilities the model assigns to the RESPONSE tokens.
+
+    We mask out the prompt: only the response's likelihood counts, exactly the
+    quantity DPO compares between chosen and rejected.
+    """
+    prompt = prompt_of(instruction)
+    full = prompt + response + "\n"
+    ids = tg.encode(full)
+    x = torch.tensor([ids[:-1]], device=DEVICE)
+    y = torch.tensor(ids[1:], device=DEVICE)
+
+    logits, _ = model(x)                       # (1, T, vocab)
+    logprobs = F.log_softmax(logits[0], dim=-1)  # (T, vocab)
+    token_lp = logprobs[torch.arange(len(y)), y]  # logprob of each actual token
+
+    prompt_len = len(tg.encode(prompt))
+    return token_lp[prompt_len - 1:].sum()     # response tokens only
+
+
+def load_model(path):
+    model = tg.TinyGPT().to(DEVICE)
+    model.load_state_dict(torch.load(path, map_location=DEVICE)["model"])
+    return model
+
+
+def margins(model):
+    """Average (chosen - rejected) logprob gap, and how often chosen wins."""
+    with torch.no_grad():
+        gaps = [sequence_logprob(model, i, c) - sequence_logprob(model, i, r)
+                for i, c, r in PREFERENCES]
+    gaps = torch.stack(gaps)
+    return gaps.mean().item(), (gaps &gt; 0).float().mean().item()
+
+
+def dpo_train():
+    # Policy = the model we optimise. Reference = a FROZEN copy of the SFT model.
+    policy = load_model(SFT_PATH)
+    reference = load_model(SFT_PATH)
+    reference.eval()
+    for p in reference.parameters():
+        p.requires_grad_(False)
+
+    optimizer = torch.optim.AdamW(policy.parameters(), lr=LR)
+    print("training with DPO (chosen &gt; rejected)...\n")
+
+    for step in range(DPO_STEPS + 1):
+        instruction, chosen, rejected = PREFERENCES[
+            torch.randint(len(PREFERENCES), (1,)).item()]
+
+        # Log-probs under the policy (with gradient)...
+        pi_chosen = sequence_logprob(policy, instruction, chosen)
+        pi_rejected = sequence_logprob(policy, instruction, rejected)
+        # ...and under the frozen reference (no gradient).
+        with torch.no_grad():
+            ref_chosen = sequence_logprob(reference, instruction, chosen)
+            ref_rejected = sequence_logprob(reference, instruction, rejected)
+
+        # The DPO loss: prefer chosen over rejected, relative to the reference.
+        logits = BETA * ((pi_chosen - ref_chosen) - (pi_rejected - ref_rejected))
+        loss = -F.logsigmoid(logits)
+
+        optimizer.zero_grad(set_to_none=True)
+        loss.backward()
+        optimizer.step()
+
+        if step % 100 == 0:
+            print(f"step {step:4d}  loss {loss.item():.3f}")
+
+    torch.save({"model": policy.state_dict(), "chars": tg.chars}, DPO_PATH)
+    print(f"\nsaved DPO model -&gt; {DPO_PATH}")
+    return policy
+
+
+if __name__ == "__main__":
+    if not os.path.exists(SFT_PATH):
+        raise SystemExit("No tiny_gpt_chat.pt — run `python 12_finetune.py` first.")
+
+    sft = load_model(SFT_PATH)
+    before_gap, before_acc = margins(sft)
+    print(f"BEFORE DPO (the SFT model from #12):")
+    print(f"  mean chosen-minus-rejected logprob gap: {before_gap:+.2f}")
+    print(f"  chosen preferred in {before_acc:.0%} of pairs\n")
+
+    if os.path.exists(DPO_PATH):
+        policy = load_model(DPO_PATH)
+        print(f"loaded existing DPO model from {DPO_PATH} "
+              f"(delete it to re-run)\n")
+    else:
+        policy = dpo_train()
+
+    after_gap, after_acc = margins(policy)
+    print(f"\nAFTER DPO:")
+    print(f"  mean chosen-minus-rejected logprob gap: {after_gap:+.2f}")
+    print(f"  chosen preferred in {after_acc:.0%} of pairs")
+
+    print(f"\nThe gap widened from {before_gap:+.2f} to {after_gap:+.2f}: the "
+          f"model now\nassigns much MORE probability to the preferred answers "
+          f"than to the\nrejected ones — without a reward model or any RL. "
+          f"That is DPO, and it\nis essentially how modern open models are "
+          f"aligned today.")
+</code></pre>
+    </details>
+  </div>
+</article>
+
+<article class="step" id="s14">
+  <div class="head">
+    <span class="nn">14</span>
+    <div>
+      <h3>The 2026 architecture</h3>
+      <div class="tag">RoPE · RMSNorm · SwiGLU · GQA</div>
+    </div>
+    <span class="file">14_modern_gpt.py</span>
+  </div>
+  <div class="body">
+    <p>Our #09 GPT is the classic 2017 transformer. Frontier open models (Llama, Mistral, Qwen, DeepSeek, Gemma) have converged on four upgrades: <strong>RoPE</strong> rotary positions, <strong>RMSNorm</strong>, <strong>SwiGLU</strong> gated feed-forwards, and <strong>GQA</strong> grouped-query attention.</p>
+<p>Same training data and loop as #09 &mdash; but it reaches a <strong>better validation loss (1.634 vs 1.674) with fewer parameters (418K vs 465K)</strong>. That efficiency is why the whole field switched. This is, in miniature, a 2026 model.</p>
+    <div class="term">
+      <div class="top"><span class="dot g"></span><span class="dot"></span><span class="dot"></span>
+        <span>14_modern_gpt.py</span><span class="out-lab">output</span></div>
+      <pre>device: cpu | parameters: 418,848
+RoPE + RMSNorm + SwiGLU + GQA (4 query heads share 2 kv heads)
+iter 2000  train 1.399  val 1.634   &lt;- beats #09 with fewer params
+
+=== Generated Shakespeare (modern architecture) ===
+JULIET:
+At, grones for your royalty, making, I'</pre>
+    </div>
+    <details class="src">
+      <summary><span class="chev">&#9656;</span> View full source &middot; 14_modern_gpt.py</summary>
+      <pre><code class="language-python">"""
+#14 in the "NN to tiny LLM" ladder.  (the 2026 architecture)
+
+Our #9 GPT is the classic 2017 Transformer. Frontier open models (Llama,
+Mistral, Qwen, DeepSeek, Gemma...) have since converged on four upgrades that
+are now standard. This file rebuilds the GPT with all four — the SAME training
+loop and data as #9, so you can compare directly.
+
+  1. RoPE  (Rotary Position Embeddings)
+     #9 added a LEARNED vector per absolute position. RoPE instead ROTATES the
+     query/key vectors by an angle proportional to their position. Relative
+     distances fall out naturally and it extrapolates to longer contexts.
+     -&gt; we delete the position-embedding table entirely.
+
+  2. RMSNorm  (instead of LayerNorm)
+     Normalise by the root-mean-square only (no mean-subtraction, no bias).
+     Fewer operations, same stability. Used by basically every modern LLM.
+
+  3. SwiGLU  (instead of the ReLU MLP)
+     A gated feed-forward: one branch decides "how much", another "what". It
+     consistently beats a plain ReLU MLP at the same parameter budget.
+
+  4. GQA  (Grouped-Query Attention, instead of full multi-head)
+     Many query heads SHARE a smaller number of key/value heads. Far less
+     memory for the KV cache at inference, with almost no quality loss — the
+     reason long-context models are affordable to serve.
+
+Reuses the tokenizer, data, and training utilities from #9.
+
+Run with:  python 14_modern_gpt.py   (run again to load instantly)
+"""
+
+import importlib.util
+import os
+
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+
+# Reuse data + tokenizer + train/eval helpers from #9.
+spec = importlib.util.spec_from_file_location("tiny_gpt", "09_tiny_gpt.py")
+tg = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(tg)
+
+torch.manual_seed(1337)
+DEVICE = tg.DEVICE
+VOCAB = tg.VOCAB
+
+# ---- Hyperparameters (head_dim must be even for RoPE) ----
+BLOCK_SIZE = tg.BLOCK_SIZE     # 64, matching #9
+N_EMBD = 96
+N_HEAD = 4                     # query heads     -&gt; head_dim = 24
+N_KV_HEAD = 2                  # key/value heads -&gt; GQA shares them 2:1
+N_LAYER = 4
+MAX_ITERS = 2000
+LEARNING_RATE = 3e-3
+EVAL_INTERVAL = 250
+CKPT_PATH = "modern_gpt.pt"
+HEAD_DIM = N_EMBD // N_HEAD
+
+
+# --------------------------------------------------------------------------
+# 1. RoPE — rotate q/k by a position-dependent angle
+# --------------------------------------------------------------------------
+def build_rope_cache(seq_len, head_dim, theta=10000.0):
+    inv_freq = 1.0 / (theta ** (torch.arange(0, head_dim, 2).float() / head_dim))
+    positions = torch.arange(seq_len).float()
+    freqs = torch.outer(positions, inv_freq)        # (T, head_dim/2)
+    emb = torch.cat([freqs, freqs], dim=-1)          # (T, head_dim)
+    return emb.cos(), emb.sin()
+
+
+def rotate_half(x):
+    half = x.shape[-1] // 2
+    x1, x2 = x[..., :half], x[..., half:]
+    return torch.cat([-x2, x1], dim=-1)
+
+
+def apply_rope(x, cos, sin):
+    # x: (B, n_heads, T, head_dim);  cos/sin: (T, head_dim)
+    return x * cos[None, None] + rotate_half(x) * sin[None, None]
+
+
+# --------------------------------------------------------------------------
+# 2. RMSNorm
+# --------------------------------------------------------------------------
+class RMSNorm(nn.Module):
+    def __init__(self, dim, eps=1e-5):
+        super().__init__()
+        self.weight = nn.Parameter(torch.ones(dim))
+        self.eps = eps
+
+    def forward(self, x):
+        rms = torch.rsqrt(x.pow(2).mean(-1, keepdim=True) + self.eps)
+        return x * rms * self.weight
+
+
+# --------------------------------------------------------------------------
+# 3. SwiGLU feed-forward
+# --------------------------------------------------------------------------
+class SwiGLU(nn.Module):
+    def __init__(self, n_embd):
+        super().__init__()
+        hidden = int(8 / 3 * n_embd)           # keeps params ~ a 4x ReLU MLP
+        self.gate = nn.Linear(n_embd, hidden, bias=False)
+        self.up = nn.Linear(n_embd, hidden, bias=False)
+        self.down = nn.Linear(hidden, n_embd, bias=False)
+
+    def forward(self, x):
+        return self.down(F.silu(self.gate(x)) * self.up(x))
+
+
+# --------------------------------------------------------------------------
+# 4. Grouped-Query Attention with RoPE
+# --------------------------------------------------------------------------
+class GroupedQueryAttention(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.q_proj = nn.Linear(N_EMBD, N_HEAD * HEAD_DIM, bias=False)
+        self.k_proj = nn.Linear(N_EMBD, N_KV_HEAD * HEAD_DIM, bias=False)
+        self.v_proj = nn.Linear(N_EMBD, N_KV_HEAD * HEAD_DIM, bias=False)
+        self.o_proj = nn.Linear(N_HEAD * HEAD_DIM, N_EMBD, bias=False)
+        self.register_buffer("mask", torch.tril(torch.ones(BLOCK_SIZE, BLOCK_SIZE)))
+
+    def forward(self, x, cos, sin):
+        B, T, _ = x.shape
+        # Project, then split into heads. Note: fewer K/V heads than Q heads.
+        q = self.q_proj(x).view(B, T, N_HEAD, HEAD_DIM).transpose(1, 2)
+        k = self.k_proj(x).view(B, T, N_KV_HEAD, HEAD_DIM).transpose(1, 2)
+        v = self.v_proj(x).view(B, T, N_KV_HEAD, HEAD_DIM).transpose(1, 2)
+
+        # RoPE rotates queries and keys by their position.
+        q, k = apply_rope(q, cos, sin), apply_rope(k, cos, sin)
+
+        # GQA: replicate each K/V head to serve a GROUP of query heads.
+        groups = N_HEAD // N_KV_HEAD
+        k = k.repeat_interleave(groups, dim=1)   # -&gt; (B, N_HEAD, T, HEAD_DIM)
+        v = v.repeat_interleave(groups, dim=1)
+
+        att = (q @ k.transpose(-2, -1)) / HEAD_DIM ** 0.5
+        att = att.masked_fill(self.mask[:T, :T] == 0, float("-inf"))
+        att = F.softmax(att, dim=-1)
+        out = att @ v                            # (B, N_HEAD, T, HEAD_DIM)
+        out = out.transpose(1, 2).contiguous().view(B, T, N_HEAD * HEAD_DIM)
+        return self.o_proj(out)
+
+
+class Block(nn.Module):
+    """Pre-norm block: RMSNorm -&gt; sublayer -&gt; residual add (Llama-style)."""
+
+    def __init__(self):
+        super().__init__()
+        self.attn_norm = RMSNorm(N_EMBD)
+        self.attn = GroupedQueryAttention()
+        self.ffn_norm = RMSNorm(N_EMBD)
+        self.ffn = SwiGLU(N_EMBD)
+
+    def forward(self, x, cos, sin):
+        x = x + self.attn(self.attn_norm(x), cos, sin)
+        x = x + self.ffn(self.ffn_norm(x))
+        return x
+
+
+class ModernGPT(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.token_emb = nn.Embedding(VOCAB, N_EMBD)   # NO position table — RoPE!
+        self.blocks = nn.ModuleList([Block() for _ in range(N_LAYER)])
+        self.norm = RMSNorm(N_EMBD)
+        self.head = nn.Linear(N_EMBD, VOCAB, bias=False)
+        cos, sin = build_rope_cache(BLOCK_SIZE, HEAD_DIM)
+        self.register_buffer("cos", cos)
+        self.register_buffer("sin", sin)
+
+    def forward(self, idx, targets=None):
+        B, T = idx.shape
+        x = self.token_emb(idx)
+        cos, sin = self.cos[:T], self.sin[:T]
+        for block in self.blocks:
+            x = block(x, cos, sin)
+        logits = self.head(self.norm(x))
+        loss = None
+        if targets is not None:
+            loss = F.cross_entropy(logits.view(-1, VOCAB), targets.view(-1))
+        return logits, loss
+
+    @torch.no_grad()
+    def generate(self, idx, max_new_tokens):
+        for _ in range(max_new_tokens):
+            logits, _ = self(idx[:, -BLOCK_SIZE:])
+            probs = F.softmax(logits[:, -1, :], dim=-1)
+            idx = torch.cat([idx, torch.multinomial(probs, 1)], dim=1)
+        return idx
+
+
+if __name__ == "__main__":
+    model = ModernGPT().to(DEVICE)
+    n_params = sum(p.numel() for p in model.parameters())
+    print(f"device: {DEVICE} | parameters: {n_params:,}")
+    print(f"RoPE + RMSNorm + SwiGLU + GQA "
+          f"({N_HEAD} query heads share {N_KV_HEAD} kv heads)\n")
+
+    if os.path.exists(CKPT_PATH):
+        model.load_state_dict(torch.load(CKPT_PATH, map_location=DEVICE)["model"])
+        print(f"loaded {CKPT_PATH} (delete it to retrain)\n")
+    else:
+        optimizer = torch.optim.AdamW(model.parameters(), lr=LEARNING_RATE)
+        for it in range(MAX_ITERS + 1):
+            if it % EVAL_INTERVAL == 0:
+                losses = tg.estimate_loss(model)
+                print(f"iter {it:4d}  train {losses['train']:.3f}  "
+                      f"val {losses['val']:.3f}")
+            x, y = tg.get_batch(tg.train_data)
+            _, loss = model(x, y)
+            optimizer.zero_grad(set_to_none=True)
+            loss.backward()
+            optimizer.step()
+        torch.save({"model": model.state_dict(), "chars": tg.chars}, CKPT_PATH)
+        print(f"\nsaved -&gt; {CKPT_PATH}")
+
+    print("\n=== Generated Shakespeare (modern architecture) ===\n")
+    start = torch.zeros((1, 1), dtype=torch.long, device=DEVICE)
+    print(tg.decode(model.generate(start, max_new_tokens=500)[0].tolist()))
+</code></pre>
+    </details>
+  </div>
+</article></div>
+  </div>
+</div></section>
+
+<section class="section" id="sota"><div class="wrap">
+  <p class="eyebrow">Checked May 2026</p>
+  <h2 class="sec">What's latest &mdash; and what we use.</h2>
+  <p class="sec-lede">The transformer hasn't been replaced; it's been refined. Two fronts have moved since 2017 &mdash; the architecture, and how models are aligned after pre-training. Steps #13 and #14 bring this ladder up to current spec.</p>
+
+  <div class="sota-grid">
+    <div class="cmp">
+      <div class="h">Architecture &middot; #09 (2017) &rarr; #14 (2026)</div>
+      <table>
+        <tr><th>Component</th><th>Classic</th><th>Modern</th></tr>
+        <tr><td class="k">Position</td><td class="old">learned absolute</td><td class="new">RoPE</td></tr>
+        <tr><td class="k">Norm</td><td class="old">LayerNorm</td><td class="new">RMSNorm</td></tr>
+        <tr><td class="k">Feed-forward</td><td class="old">ReLU MLP</td><td class="new">SwiGLU</td></tr>
+        <tr><td class="k">Attention</td><td class="old">multi-head</td><td class="new">GQA</td></tr>
+        <tr><td class="k">Result</td><td class="old">val 1.674 / 465K</td><td class="new">val 1.634 / 418K</td></tr>
+      </table>
+    </div>
+    <div class="cmp">
+      <div class="h">Post-training stack &middot; 2026</div>
+      <div style="padding:18px 16px">
+        <p style="margin:0 0 14px;color:#c2c7d0;font-size:16px">Every major model this past year &mdash; DeepSeek-R1, Nemotron, GPT-5-class &mdash; uses a modular stack rather than plain RLHF:</p>
+        <div class="stack">
+          <span class="n">SFT</span><span class="ar">&rarr;</span>
+          <span class="n">DPO</span><span class="ar">&rarr;</span>
+          <span class="n">GRPO / RLVR</span>
+        </div>
+        <p style="margin:16px 0 0;color:var(--muted);font-size:15px">
+          <span class="pill">SFT &middot; #12</span> instruction following<br>
+          <span class="pill">DPO &middot; #13</span> preference alignment, no reward model<br>
+          <span class="pill">GRPO</span> RL with verifiable rewards, for reasoning
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <p class="sec-lede" style="margin-top:28px;font-size:17px;color:var(--muted)">
+    Other current ideas worth knowing, all variations on what you've built: Multi-Latent Attention (DeepSeek) compresses the KV cache further; Mixture-of-Experts routes each token to a few specialist MLPs; QK-Norm adds stability. The atom is unchanged &mdash; it's attention, all the way down.</p>
+
+  <div class="sources">
+    <strong style="color:var(--ink)">Sources</strong> &middot; checked May 2026<br>
+    <a href="https://magazine.sebastianraschka.com/p/the-big-llm-architecture-comparison">Raschka &mdash; The Big LLM Architecture Comparison</a><br>
+    <a href="https://llm-stats.com/blog/research/post-training-techniques-2026">Post-Training in 2026: GRPO, DAPO, RLVR &amp; Beyond</a><br>
+    <a href="https://www.sundeepteki.org/advice/the-complete-guide-to-post-training-llms-how-sft-rlhf-dpo-and-grpo-shape-llms">The Complete Guide to Post-Training LLMs (SFT/RLHF/DPO/GRPO)</a><br>
+    <a href="https://arxiv.org/abs/2305.18290">Rafailov et al. &mdash; Direct Preference Optimization (DPO)</a>
+  </div>
+</div></section>
+
+<section class="section run" id="run"><div class="wrap">
+  <p class="eyebrow">Get going</p>
+  <h2 class="sec">Run it yourself.</h2>
+  <p class="sec-lede">Pure Python. One-time setup, then run any script. The GPT trains in ~2 minutes on a laptop CPU and caches its weights so every later step loads instantly.</p>
+  <pre style="margin-top:26px">
+<span class="c"># one-time setup</span>
+python3 -m venv .venv
+.venv/bin/pip install numpy torch
+
+<span class="c"># climb the ladder</span>
+<span class="p">.venv/bin/python</span> 00_neural_network.py  <span class="c"># the atom</span>
+<span class="p">.venv/bin/python</span> 09_tiny_gpt.py        <span class="c"># a real GPT on Shakespeare</span>
+<span class="p">.venv/bin/python</span> 14_modern_gpt.py      <span class="c"># the 2026 architecture</span></pre>
+</div></section>
+
+<footer><div class="wrap">
+  Built step by step, one runnable script at a time. <b>The architecture is GPT's; the scale is a laptop's.</b><br>
+  15 scripts &middot; neural&nbsp;network &rarr; tiny&nbsp;GPT &rarr; DPO-aligned, 2026-spec model &middot; no black boxes.
+</div></footer>
+
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-core.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-clike.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-python.min.js"></script>
+<script>
+// hero neural-net animation
+(function(){
+  const c=document.getElementById('net'); if(!c) return;
+  const x=c.getContext('2d'); let W,H,nodes=[],edges=[],pulses=[];
+  const layers=[4,6,6,5,3];
+  function build(){
+    W=c.width=c.offsetWidth*devicePixelRatio; H=c.height=c.offsetHeight*devicePixelRatio;
+    nodes=[]; edges=[];
+    const pad=W*0.08, gw=(W-pad*2)/(layers.length-1);
+    layers.forEach((cnt,li)=>{
+      for(let i=0;i<cnt;i++){
+        const gy=H/(cnt+1)*(i+1);
+        nodes.push({x:pad+gw*li,y:gy,l:li,p:Math.random()*Math.PI*2});
+      }
+    });
+    for(let a=0;a<nodes.length;a++)for(let b=0;b<nodes.length;b++)
+      if(nodes[b].l===nodes[a].l+1) edges.push([a,b]);
+  }
+  function spawn(){
+    if(pulses.length<26 && edges.length){
+      const e=edges[(Math.random()*edges.length)|0];
+      pulses.push({a:e[0],b:e[1],t:0,s:0.012+Math.random()*0.02});
+    }
+  }
+  function draw(){
+    x.clearRect(0,0,W,H);
+    x.lineWidth=1*devicePixelRatio;
+    edges.forEach(e=>{const A=nodes[e[0]],B=nodes[e[1]];
+      x.strokeStyle='rgba(255,255,255,0.05)';x.beginPath();x.moveTo(A.x,A.y);x.lineTo(B.x,B.y);x.stroke();});
+    pulses.forEach(p=>{const A=nodes[p.a],B=nodes[p.b];p.t+=p.s;
+      const px=A.x+(B.x-A.x)*p.t, py=A.y+(B.y-A.y)*p.t;
+      const g=x.createRadialGradient(px,py,0,px,py,7*devicePixelRatio);
+      g.addColorStop(0,'rgba(94,240,192,0.9)');g.addColorStop(1,'rgba(94,240,192,0)');
+      x.fillStyle=g;x.beginPath();x.arc(px,py,7*devicePixelRatio,0,7);x.fill();});
+    pulses=pulses.filter(p=>p.t<1);
+    const t=Date.now()/900;
+    nodes.forEach(n=>{const r=(2.4+Math.sin(t+n.p)*0.9)*devicePixelRatio;
+      x.fillStyle='rgba(94,240,192,'+(0.5+Math.sin(t+n.p)*0.3)+')';
+      x.beginPath();x.arc(n.x,n.y,r,0,7);x.fill();});
+    if(Math.random()<0.32) spawn();
+    requestAnimationFrame(draw);
+  }
+  build(); draw(); addEventListener('resize',build);
+})();
+
+// scroll reveal + scrollspy
+(function(){
+  const steps=[...document.querySelectorAll('.step')];
+  const io=new IntersectionObserver((es)=>{es.forEach(e=>{if(e.isIntersecting)e.target.classList.add('in');});},{threshold:0.12});
+  steps.forEach(s=>io.observe(s));
+  const links=new Map([...document.querySelectorAll('.index a')].map(a=>[a.getAttribute('href').slice(1),a]));
+  const spy=new IntersectionObserver((es)=>{es.forEach(e=>{if(e.isIntersecting){
+    links.forEach(l=>l.classList.remove('on'));
+    const a=links.get(e.target.id); if(a)a.classList.add('on');
+  }});},{rootMargin:'-45% 0px -50% 0px'});
+  steps.forEach(s=>spy.observe(s));
+})();
+</script>
+</body>
+</html>

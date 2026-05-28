@@ -1,0 +1,16 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# Trained model checkpoints (regenerate by running the scripts)
+*.pt
+
+# Training corpus (downloaded by 09_tiny_gpt.py)
+input.txt
+
+# OS
+.DS_Store
+
+# Local screenshots
+/tmp/llm_*.png
