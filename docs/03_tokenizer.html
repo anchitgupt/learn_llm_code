@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>03 &middot; Turning text into numbers &mdash; Build an LLM from Scratch</title>
+<meta name="description" content="char-level and Byte-Pair Encoding (BPE)">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header class="bar"><div class="wrap">
+  <a class="brand" href="index.html">from_scratch<b>.llm</b></a>
+  <nav><a href="index.html#ladder">&larr; All steps</a><a href="02_bigram_nn.html">&larr; 02</a><a href="04_mlp_lm.html">04 &rarr;</a></nav>
+</div></header>
+
+<section class="stephero"><div class="wrap">
+  <div class="crumb">From neural net to language</div>
+  <div class="sh-head">
+    <span class="nn">03</span>
+    <div><h1>Turning text into numbers</h1><div class="tag">char-level and Byte-Pair Encoding (BPE)</div></div>
+  </div>
+  <span class="file">03_tokenizer.py</span>
+</div></section>
+
+<section class="section"><div class="wrap stepwrap">
+  <div class="lead"><p>Models only understand numbers, so we need a reversible map between text and integer IDs. We build a character tokenizer, then a tiny <strong>BPE</strong> &mdash; the algorithm GPT actually uses, which greedily merges the most frequent adjacent pair into a new token, over and over.</p>
+<p>Watch it learn <code>t,h &rarr; 'th' &rarr; 'the' &rarr; ' the'</code>. Fewer tokens per word means more real text fits in the context window &mdash; the whole reason BPE beats characters.</p></div>
+  <div class="eq">merge* = argmax over adjacent pairs of  count(a, b)&emsp;&rarr;&emsp;new token<span class="cap">BPE greedily merges the most frequent adjacent pair, over and over.</span></div><div class="theory"><div class="lab">The theory</div><p>A tokenizer is a reversible map between text and integer IDs, and its design is a trade-off between <strong>vocabulary size</strong> and <strong>sequence length</strong>. Character-level: tiny vocabulary, very long sequences, but never an unknown token. Word-level: short sequences, but a huge vocabulary and an out-of-vocabulary problem for any new word.</p><p><strong>Byte-Pair Encoding</strong> finds the sweet spot. Starting from raw bytes/characters, it repeatedly merges the most frequent adjacent pair into a new subword token. Frequent chunks like <code>the</code> or <code>ing</code> become single tokens while rare words still decompose into pieces &mdash; an information-theoretic win, giving common patterns short codes. Modern LLMs use byte-level BPE for exactly this robustness, which is why fewer tokens per word means more text fits in the context window.</p></div>
+  <div class="term">
+    <div class="top"><span class="dot g"></span><span class="dot"></span><span class="dot"></span>
+      <span>03_tokenizer.py</span><span class="out-lab">output</span></div>
+    <pre>Learned merges (most common pairs become tokens):
+  (t, h)   -&gt; 'th'
+  'th' + e -&gt; 'the'
+  ' ' + the -&gt; ' the'
+'the theme' is 9 chars but only 1 BPE token</pre>
+  </div>
+  <div class="srch">Full source &middot; <span>03_tokenizer.py</span></div>
+  <div class="term">
+    <div class="top"><span class="dot g"></span><span class="dot"></span><span class="dot"></span>
+      <span>03_tokenizer.py</span><span class="out-lab">source</span></div>
+    <pre><code class="language-python">"""
+#3 in the "NN to tiny LLM" ladder.
+
+A model only understands numbers, so we need a TOKENIZER: a reversible map
+between text and a sequence of integer IDs.
+
+  encode("hi")  -&gt; [7, 8]
+  decode([7,8]) -&gt; "hi"
+
+Two approaches here:
+  1. CharTokenizer  — one ID per character. Simple, what #1/#2 used implicitly.
+  2. BPETokenizer   — Byte-Pair Encoding: start from characters, then greedily
+                      MERGE the most frequent adjacent pair into a new token,
+                      over and over. This is (essentially) what GPT-2/3/4 use.
+                      It keeps the vocabulary small while letting common chunks
+                      like "th", "ing", " the" become single tokens.
+
+Run with:  python tokenizer.py
+"""
+
+from collections import Counter
+
+
+# --------------------------------------------------------------------------
+# 1. Character-level tokenizer
+# --------------------------------------------------------------------------
+class CharTokenizer:
+    """One token per unique character in the training text."""
+
+    def __init__(self, text):
+        chars = sorted(set(text))
+        self.stoi = {c: i for i, c in enumerate(chars)}
+        self.itos = {i: c for c, i in self.stoi.items()}
+        self.vocab_size = len(chars)
+
+    def encode(self, text):
+        return [self.stoi[c] for c in text]
+
+    def decode(self, ids):
+        return "".join(self.itos[i] for i in ids)
+
+
+# --------------------------------------------------------------------------
+# 2. Byte-Pair Encoding (BPE) tokenizer
+# --------------------------------------------------------------------------
+class BPETokenizer:
+    """Learn a vocabulary by repeatedly merging the most common adjacent pair.
+
+    Start with raw bytes (0..255) so ANY text is representable. Then run
+    `num_merges` rounds; each round finds the most frequent neighbouring pair
+    of token IDs and assigns it a brand-new ID.
+    """
+
+    def __init__(self):
+        self.merges = {}   # (id_a, id_b) -&gt; new_id, in the order learned
+        self.vocab = {i: bytes([i]) for i in range(256)}  # id -&gt; raw bytes
+
+    def _pair_counts(self, ids):
+        return Counter(zip(ids, ids[1:]))
+
+    def _merge(self, ids, pair, new_id):
+        """Replace every occurrence of `pair` in `ids` with `new_id`."""
+        out, i = [], 0
+        while i &lt; len(ids):
+            if i &lt; len(ids) - 1 and (ids[i], ids[i + 1]) == pair:
+                out.append(new_id)
+                i += 2
+            else:
+                out.append(ids[i])
+                i += 1
+        return out
+
+    def train(self, text, num_merges=20):
+        ids = list(text.encode("utf-8"))          # bytes -&gt; initial token IDs
+        for k in range(num_merges):
+            counts = self._pair_counts(ids)
+            if not counts:
+                break
+            pair = max(counts, key=counts.get)     # most frequent adjacent pair
+            new_id = 256 + k
+            ids = self._merge(ids, pair, new_id)
+            self.merges[pair] = new_id
+            # Record what bytes this new token expands to (for decoding).
+            self.vocab[new_id] = self.vocab[pair[0]] + self.vocab[pair[1]]
+        return self
+
+    @property
+    def vocab_size(self):
+        return len(self.vocab)
+
+    def encode(self, text):
+        ids = list(text.encode("utf-8"))
+        # Apply merges in the SAME order they were learned.
+        for pair, new_id in self.merges.items():
+            ids = self._merge(ids, pair, new_id)
+        return ids
+
+    def decode(self, ids):
+        raw = b"".join(self.vocab[i] for i in ids)
+        return raw.decode("utf-8", errors="replace")
+
+
+# --------------------------------------------------------------------------
+# Demo
+# --------------------------------------------------------------------------
+if __name__ == "__main__":
+    text = "the theme of the theater is the thunder"
+
+    print("=== CharTokenizer ===")
+    ct = CharTokenizer(text)
+    ids = ct.encode("the theme")
+    print("vocab size:", ct.vocab_size)
+    print("encode('the theme') -&gt;", ids)
+    print("decode back        -&gt;", repr(ct.decode(ids)))
+
+    print("\n=== BPETokenizer ===")
+    bpe = BPETokenizer().train(text, num_merges=10)
+    ids = bpe.encode("the theme")
+    print("vocab size:", bpe.vocab_size, "(256 bytes + learned merges)")
+    print("encode('the theme') -&gt;", ids)
+    print("decode back        -&gt;", repr(bpe.decode(ids)))
+    print(f"'the theme' is {len('the theme')} chars but only {len(ids)} BPE tokens")
+
+    print("\nLearned merges (most common pairs became single tokens):")
+    for pair, new_id in bpe.merges.items():
+        piece = bpe.vocab[new_id].decode("utf-8", errors="replace")
+        print(f"  {pair} -&gt; {new_id}   = {piece!r}")
+</code></pre>
+  </div>
+  <div class="pager"><a class="prev" href="02_bigram_nn.html"><div class="dir">&larr; Previous</div><div class="pt">02 &middot; The same model, learned</div></a><a class="next" href="04_mlp_lm.html"><div class="dir">Next &rarr;</div><div class="pt">04 &middot; Embeddings &amp; context</div></a></div>
+</div></section>
+
+<footer><div class="wrap">
+  <a href="index.html" style="color:var(--accent)">&larr; Back to all 17 steps</a>
+  &middot; built one runnable script at a time.
+</div></footer>
+
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-core.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-clike.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-python.min.js"></script>
+</body>
+</html>

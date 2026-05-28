@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>01 &middot; The simplest language model &mdash; Build an LLM from Scratch</title>
+<meta name="description" content="predict the next character by counting">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header class="bar"><div class="wrap">
+  <a class="brand" href="index.html">from_scratch<b>.llm</b></a>
+  <nav><a href="index.html#ladder">&larr; All steps</a><a href="00_neural_network.html">&larr; 00</a><a href="02_bigram_nn.html">02 &rarr;</a></nav>
+</div></header>
+
+<section class="stephero"><div class="wrap">
+  <div class="crumb">From neural net to language</div>
+  <div class="sh-head">
+    <span class="nn">01</span>
+    <div><h1>The simplest language model</h1><div class="tag">predict the next character by counting</div></div>
+  </div>
+  <span class="file">01_bigram_counts.py</span>
+</div></section>
+
+<section class="section"><div class="wrap stepwrap">
+  <div class="lead"><p>A language model answers one question: <em>given what came before, what comes next?</em> The simplest possible version doesn't even use a network &mdash; it just <strong>counts</strong> which character tends to follow which, then samples from those frequencies.</p>
+<p>The generated names are mostly gibberish, and that's the lesson: looking at only <em>one</em> previous character has no memory of the wider word. Every later step exists to fix this.</p></div>
+  <div class="eq">P(next | cur) = count(cur, next) / &Sigma; count(cur, &middot;)<span class="cap">the maximum-likelihood bigram: probabilities are just normalized counts.</span></div><div class="theory"><div class="lab">The theory</div><p>Language modeling is the task of estimating P(next token | previous tokens). A <strong>bigram</strong> model makes the <em>Markov assumption</em> that the next token depends only on the current one. Under that assumption the maximum-likelihood estimate has a closed form: count each pair and normalize each row to a probability distribution.</p><p><strong>Smoothing</strong> (adding 1 to every count, a.k.a. Laplace smoothing) prevents any transition from having probability zero &mdash; otherwise an unseen pair would make the whole sequence impossible and the log-loss infinite. Generation is then just repeated sampling from each conditional distribution. The fatal limit: a context of one token has no memory of the wider word, which is exactly what later steps fix.</p></div>
+  <div class="term">
+    <div class="top"><span class="dot g"></span><span class="dot"></span><span class="dot"></span>
+      <span>01_bigram_counts.py</span><span class="out-lab">output</span></div>
+    <pre>Most likely first letters:
+  'a'  9.62%   'm'  7.69%   'e'  7.69%
+
+Generated names:
+  nea
+  po
+  sxormxu
+  tzybzxvkfux</pre>
+  </div>
+  <div class="srch">Full source &middot; <span>01_bigram_counts.py</span></div>
+  <div class="term">
+    <div class="top"><span class="dot g"></span><span class="dot"></span><span class="dot"></span>
+      <span>01_bigram_counts.py</span><span class="out-lab">source</span></div>
+    <pre><code class="language-python">"""
+#1 in the "NN to tiny LLM" ladder.
+
+The simplest possible language model: a BIGRAM model built from pure counts.
+No neural network, no gradients — just "how often does character Y follow
+character X?" We tally that into a table, turn counts into probabilities,
+and sample new words one character at a time.
+
+This is the conceptual seed of every LLM: predict the next token given the
+previous one(s). Everything later just makes this prediction smarter.
+
+Run with:  python bigram_counts.py
+"""
+
+import numpy as np
+
+# A tiny training corpus. Real models use millions of words; we use a handful
+# of names so you can eyeball what's happening. '.' is a special marker for
+# both START and END of a word.
+WORDS = [
+    "emma", "olivia", "ava", "isabella", "sophia", "mia", "amelia", "harper",
+    "liam", "noah", "oliver", "william", "james", "benjamin", "lucas", "henry",
+    "anna", "anya", "maria", "elena", "nina", "sara", "leo", "max", "ella",
+]
+
+
+def build_counts(words):
+    """Count every (current_char -&gt; next_char) pair across all words."""
+    # 27 symbols: '.' (index 0) plus 'a'..'z' (1..26).
+    chars = ["."] + sorted("abcdefghijklmnopqrstuvwxyz")
+    stoi = {c: i for i, c in enumerate(chars)}        # char  -&gt; index
+    itos = {i: c for c, i in stoi.items()}            # index -&gt; char
+
+    counts = np.zeros((27, 27), dtype=np.int64)
+    for word in words:
+        # Wrap each word with start/end markers: ".emma."
+        symbols = ["."] + list(word) + ["."]
+        for current, nxt in zip(symbols, symbols[1:]):
+            counts[stoi[current], stoi[nxt]] += 1
+    return counts, stoi, itos
+
+
+def to_probabilities(counts):
+    """Convert raw counts into a probability for each row.
+
+    +1 is 'smoothing': it stops any transition from being impossible (prob 0),
+    which would otherwise break sampling and infinite-loss situations.
+    """
+    probs = counts.astype(np.float64) + 1
+    probs /= probs.sum(axis=1, keepdims=True)   # each row sums to 1
+    return probs
+
+
+def generate(probs, itos, rng, max_len=20):
+    """Sample one new word, character by character, until we hit '.'."""
+    index = 0                       # always start at '.'
+    out = []
+    for _ in range(max_len):
+        # Pick the next character according to the learned probabilities.
+        index = rng.choice(27, p=probs[index])
+        if index == 0:              # hit the end marker
+            break
+        out.append(itos[index])
+    return "".join(out)
+
+
+if __name__ == "__main__":
+    counts, stoi, itos = build_counts(WORDS)
+    probs = to_probabilities(counts)
+
+    # Peek at what it learned: what most often follows the start marker '.'?
+    start_row = probs[0]
+    top = np.argsort(start_row)[::-1][:5]
+    print("Most likely first letters:")
+    for i in top:
+        print(f"  '{itos[i]}'  {start_row[i]:.2%}")
+
+    print("\nGenerated names:")
+    rng = np.random.default_rng(0)
+    for _ in range(10):
+        print("  " + generate(probs, itos, rng))
+</code></pre>
+  </div>
+  <div class="pager"><a class="prev" href="00_neural_network.html"><div class="dir">&larr; Previous</div><div class="pt">00 &middot; A neural network</div></a><a class="next" href="02_bigram_nn.html"><div class="dir">Next &rarr;</div><div class="pt">02 &middot; The same model, learned</div></a></div>
+</div></section>
+
+<footer><div class="wrap">
+  <a href="index.html" style="color:var(--accent)">&larr; Back to all 17 steps</a>
+  &middot; built one runnable script at a time.
+</div></footer>
+
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-core.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-clike.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-python.min.js"></script>
+</body>
+</html>

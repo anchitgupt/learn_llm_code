@@ -11,9 +11,11 @@ Nothing here is a black box. By the end, every core idea inside a frontier LLM
 separating this from the real thing is **scale** — more parameters, more data,
 more compute.
 
-> 📖 **Read it as a website:** the whole ladder is also a single static page in
-> [`docs/`](docs/index.html) — narrative, real terminal output, and full source
-> for every step. See [Deploy to GitHub Pages](#deploy-to-github-pages) below.
+> 📖 **Read it as a website:** the whole ladder is also a multi-page static site in
+> [`docs/`](docs/) — a landing page plus a **dedicated page for each script**
+> (idea, key formula, theory, real terminal output, full source). Live at
+> **<https://anchitgupt.github.io/learn_llm_code/>**. See
+> [Deploy to GitHub Pages](#deploy-to-github-pages) below.
 
 ---
 

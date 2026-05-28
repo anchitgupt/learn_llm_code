@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>06 &middot; Switching to PyTorch &mdash; Build an LLM from Scratch</title>
+<meta name="description" content="all the hand-coded backprop collapses to one line">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header class="bar"><div class="wrap">
+  <a class="brand" href="index.html">from_scratch<b>.llm</b></a>
+  <nav><a href="index.html#ladder">&larr; All steps</a><a href="05_autograd.html">&larr; 05</a><a href="07_self_attention.html">07 &rarr;</a></nav>
+</div></header>
+
+<section class="stephero"><div class="wrap">
+  <div class="crumb">The deep-learning toolkit</div>
+  <div class="sh-head">
+    <span class="nn">06</span>
+    <div><h1>Switching to PyTorch</h1><div class="tag">all the hand-coded backprop collapses to one line</div></div>
+  </div>
+  <span class="file">06_switch_to_pytorch.py</span>
+</div></section>
+
+<section class="section"><div class="wrap stepwrap">
+  <div class="lead"><p>The same #04 model, rewritten in PyTorch. Thirty lines of manual gradient math become a single <code>loss.backward()</code>; the update loop becomes <code>optimizer.step()</code>; softmax+log becomes <code>F.cross_entropy</code>.</p>
+<p>From here we never hand-derive a gradient again &mdash; which is exactly what frees us to build something as intricate as a transformer.</p></div>
+  <div class="eq">loss.backward()&emsp;&equiv;&emsp;the autograd graph of #05, on tensors&emsp;&middot;&emsp;optimizer.step()<span class="cap">PyTorch = tensors + autograd + modules + optimizers, GPU-accelerated.</span></div><div class="theory"><div class="lab">The theory</div><p>PyTorch packages the ideas so far into reusable machinery: <strong>tensors</strong> (n-dimensional arrays that track gradients), <strong>nn.Module</strong> (parameter bookkeeping), <strong>optimizers</strong>, and GPU acceleration. A single <code>loss.backward()</code> runs the same reverse-mode autodiff you built in #05, but over whole tensors; <code>optimizer.step()</code> applies the update rule to every parameter.</p><p>The optimizer matters: plain SGD uses one global learning rate, while <strong>Adam/AdamW</strong> keep per-parameter running estimates of the gradient's mean and variance to adapt each step size &mdash; far more robust for deep networks. This abstraction is exactly what frees the next steps to build something as intricate as a transformer without ever writing a gradient by hand.</p></div>
+  <div class="term">
+    <div class="top"><span class="dot g"></span><span class="dot"></span><span class="dot"></span>
+      <span>06_switch_to_pytorch.py</span><span class="out-lab">output</span></div>
+    <pre>dataset: 192 examples | model: 3571 parameters
+epoch 1800  loss 0.6855
+
+Generated names:
+  benjamin   sophia   olivia   anya</pre>
+  </div>
+  <div class="srch">Full source &middot; <span>06_switch_to_pytorch.py</span></div>
+  <div class="term">
+    <div class="top"><span class="dot g"></span><span class="dot"></span><span class="dot"></span>
+      <span>06_switch_to_pytorch.py</span><span class="out-lab">source</span></div>
+    <pre><code class="language-python">"""
+#6 in the "NN to tiny LLM" ladder.
+
+The SAME MLP language model from #4 (mlp_lm.py) — embeddings + context window +
+hidden layer — but written in PyTorch. Compare the two files side by side:
+
+  - The forward pass is almost identical to our NumPy version.
+  - ALL the hand-coded backprop from #4 collapses into one line: loss.backward()
+    (PyTorch's autograd, exactly the engine you built in #5, doing the work).
+  - Parameter updates become an optimizer: optimizer.step().
+
+This is the toolkit we'll use to build the transformer. Once you trust that
+this matches #4, we never hand-derive a gradient again.
+
+Run with:  python switch_to_pytorch.py
+"""
+
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+
+WORDS = [
+    "emma", "olivia", "ava", "isabella", "sophia", "mia", "amelia", "harper",
+    "liam", "noah", "oliver", "william", "james", "benjamin", "lucas", "henry",
+    "anna", "anya", "maria", "elena", "nina", "sara", "leo", "max", "ella",
+    "grace", "chloe", "zoe", "lily", "aria", "ruby", "ivy", "luna", "nora",
+]
+
+CHARS = ["."] + sorted("abcdefghijklmnopqrstuvwxyz")
+STOI = {c: i for i, c in enumerate(CHARS)}
+ITOS = {i: c for c, i in STOI.items()}
+VOCAB = len(CHARS)
+
+BLOCK_SIZE = 3
+EMB_DIM = 8
+HIDDEN = 64
+
+torch.manual_seed(0)
+
+
+def build_dataset(words):
+    xs, ys = [], []
+    for word in words:
+        context = [0] * BLOCK_SIZE
+        for ch in list(word) + ["."]:
+            target = STOI[ch]
+            xs.append(context)
+            ys.append(target)
+            context = context[1:] + [target]
+    return torch.tensor(xs), torch.tensor(ys)
+
+
+class MLP(nn.Module):
+    """Exactly #4's architecture, expressed with PyTorch building blocks."""
+
+    def __init__(self):
+        super().__init__()
+        self.C = nn.Embedding(VOCAB, EMB_DIM)            # the embedding table
+        self.fc1 = nn.Linear(BLOCK_SIZE * EMB_DIM, HIDDEN)  # hidden layer
+        self.fc2 = nn.Linear(HIDDEN, VOCAB)              # output scores (logits)
+
+    def forward(self, x):
+        emb = self.C(x)                  # (N, BLOCK_SIZE, EMB_DIM)
+        flat = emb.view(emb.shape[0], -1)  # flatten the context
+        h = torch.tanh(self.fc1(flat))
+        logits = self.fc2(h)
+        return logits
+
+
+def train(model, X, Y, epochs=2000, lr=0.1):
+    # The optimizer holds the parameters and applies the gradient-descent step.
+    optimizer = torch.optim.SGD(model.parameters(), lr=lr)
+    for epoch in range(epochs):
+        logits = model(X)
+        # cross_entropy = softmax + negative-log-likelihood, in one call.
+        loss = F.cross_entropy(logits, Y)
+
+        optimizer.zero_grad()   # clear old gradients
+        loss.backward()         # &lt;-- autograd computes EVERY gradient for us
+        optimizer.step()        # &lt;-- update all parameters
+
+        if epoch % 200 == 0:
+            print(f"epoch {epoch:4d}  loss {loss.item():.4f}")
+
+
+@torch.no_grad()
+def generate(model, max_len=20):
+    context = [0] * BLOCK_SIZE
+    out = []
+    for _ in range(max_len):
+        logits = model(torch.tensor([context]))
+        probs = F.softmax(logits, dim=1)
+        idx = torch.multinomial(probs, num_samples=1).item()
+        if idx == 0:
+            break
+        out.append(ITOS[idx])
+        context = context[1:] + [idx]
+    return "".join(out)
+
+
+if __name__ == "__main__":
+    X, Y = build_dataset(WORDS)
+    n_params = sum(p.numel() for p in MLP().parameters())
+    print(f"dataset: {len(X)} examples | model: {n_params} parameters\n")
+
+    model = MLP()
+    train(model, X, Y)
+
+    print("\nGenerated names:")
+    for _ in range(12):
+        print("  " + generate(model))
+</code></pre>
+  </div>
+  <div class="pager"><a class="prev" href="05_autograd.html"><div class="dir">&larr; Previous</div><div class="pt">05 &middot; Automatic differentiation</div></a><a class="next" href="07_self_attention.html"><div class="dir">Next &rarr;</div><div class="pt">07 &middot; Self-attention</div></a></div>
+</div></section>
+
+<footer><div class="wrap">
+  <a href="index.html" style="color:var(--accent)">&larr; Back to all 17 steps</a>
+  &middot; built one runnable script at a time.
+</div></footer>
+
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-core.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-clike.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-python.min.js"></script>
+</body>
+</html>

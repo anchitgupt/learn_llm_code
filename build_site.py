@@ -563,6 +563,51 @@ footer{border-top:1px solid var(--line);padding:46px 0 80px;color:var(--muted);f
 footer b{color:var(--ink)}
 .sources{font-size:13px;color:var(--muted);margin-top:18px;line-height:1.9}
 .sources a{color:var(--accent-dim)}
+
+/* brand as link */
+.bar a.brand{color:var(--ink)} .bar a.brand:hover{text-decoration:none}
+
+/* ladder grid (index) */
+.phlabel{font-family:var(--mono);font-size:12px;letter-spacing:.26em;text-transform:uppercase;
+  color:var(--accent);margin:40px 0 0;padding-top:26px;border-top:1px solid var(--line)}
+.phlabel.first{border-top:0;padding-top:0;margin-top:26px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(258px,1fr));gap:14px;margin-top:16px}
+.card{position:relative;display:block;background:var(--panel);border:1px solid var(--line);
+  border-radius:6px;padding:18px 18px 20px;transition:transform .16s,border-color .16s}
+.card:hover{border-color:var(--accent);transform:translateY(-3px);text-decoration:none}
+.card .cn{font-family:var(--mono);font-size:13px;color:var(--faint)}
+.card h3{font-family:var(--mono);font-size:16px;font-weight:600;margin:7px 0;color:var(--ink)}
+.card:hover h3{color:var(--accent)}
+.card p{margin:0;color:var(--muted);font-size:13.5px;font-family:var(--mono);line-height:1.5}
+.card .go{position:absolute;top:16px;right:18px;color:var(--faint);font-family:var(--mono)}
+.card:hover .go{color:var(--accent)}
+
+/* step page */
+.stephero{padding:54px 0 30px;border-bottom:1px solid var(--line)}
+.crumb{font-family:var(--mono);font-size:12px;letter-spacing:.22em;text-transform:uppercase;
+  color:var(--accent);margin-bottom:20px}
+.sh-head{display:flex;align-items:baseline;gap:22px}
+.sh-head .nn{font-family:var(--mono);font-size:clamp(44px,8vw,72px);font-weight:700;
+  color:var(--faint);line-height:.85}
+.sh-head h1{font-family:var(--mono);font-weight:700;font-size:clamp(27px,4.5vw,44px);
+  margin:0;letter-spacing:-.01em}
+.sh-head .tag{font-family:var(--mono);font-size:14px;color:var(--accent);margin-top:9px}
+.stephero .file{display:inline-block;margin-top:20px;font-family:var(--mono);font-size:12px;
+  color:var(--muted);border:1px solid var(--line);padding:5px 10px;border-radius:2px}
+.stepwrap{max-width:830px}
+.lead p{font-size:18.5px;line-height:1.75;color:#d7dbe2;margin:0 0 15px}
+.srch{font-family:var(--mono);font-size:12px;letter-spacing:.2em;text-transform:uppercase;
+  color:var(--amber);margin:32px 0 0}
+.srch span{color:var(--muted);letter-spacing:0;text-transform:none}
+.term pre code{color:#cdd2da}
+.pager{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:46px}
+.pager a{display:block;padding:18px 20px;border:1px solid var(--line);border-radius:6px;transition:border-color .16s}
+.pager a:hover{border-color:var(--accent);text-decoration:none}
+.pager .dir{font-family:var(--mono);font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--faint)}
+.pager .pt{font-family:var(--mono);color:var(--ink);font-size:15px;margin-top:7px}
+.pager a:hover .pt{color:var(--accent)}
+.pager .next{text-align:right}
+@media(max-width:600px){.pager{grid-template-columns:1fr}}
 """
 
 
@@ -611,81 +656,151 @@ JS = r"""
   }
   build(); draw(); addEventListener('resize',build);
 })();
-
-// scroll reveal + scrollspy
-(function(){
-  const steps=[...document.querySelectorAll('.step')];
-  const io=new IntersectionObserver((es)=>{es.forEach(e=>{if(e.isIntersecting)e.target.classList.add('in');});},{threshold:0.12});
-  steps.forEach(s=>io.observe(s));
-  const links=new Map([...document.querySelectorAll('.index a')].map(a=>[a.getAttribute('href').slice(1),a]));
-  const spy=new IntersectionObserver((es)=>{es.forEach(e=>{if(e.isIntersecting){
-    links.forEach(l=>l.classList.remove('on'));
-    const a=links.get(e.target.id); if(a)a.classList.add('on');
-  }});},{rootMargin:'-45% 0px -50% 0px'});
-  steps.forEach(s=>spy.observe(s));
-})();
 """
 
 
-def render_step(s):
+def slug(s):
+    """Per-script page filename: 09_tiny_gpt.py -> 09_tiny_gpt.html."""
+    return s["file"].replace(".py", ".html")
+
+
+def eq_theory_html(s):
+    t = THEORY.get(s["n"])
+    parts = []
+    if t and t.get("eq"):
+        parts.append(f'<div class="eq">{t["eq"]}'
+                     f'<span class="cap">{t.get("cap", "")}</span></div>')
+    if t and t.get("paras"):
+        paras = "".join(f"<p>{p}</p>" for p in t["paras"])
+        parts.append(f'<div class="theory"><div class="lab">The theory</div>{paras}</div>')
+    return "".join(parts)
+
+
+HEAD = """<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{title}</title>
+<meta name="description" content="{desc}">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+"""
+
+PRISM = ('\n<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-core.min.js"></script>'
+         '\n<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-clike.min.js"></script>'
+         '\n<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-python.min.js"></script>\n')
+
+
+def render_step_page(s, prev, nxt):
+    """A full standalone HTML page for one script."""
     src = esc(read_source(s["file"]))
     out = esc(s["out"])
     body = "\n".join(f"<p>{p}</p>" for p in s["body"])
 
-    t = THEORY.get(s["n"])
-    eq_html = theory_html = ""
-    if t and t.get("eq"):
-        eq_html = (f'<div class="eq">{t["eq"]}'
-                   f'<span class="cap">{t.get("cap", "")}</span></div>')
-    if t and t.get("paras"):
-        paras = "".join(f"<p>{p}</p>" for p in t["paras"])
-        theory_html = f'<div class="theory"><div class="lab">The theory</div>{paras}</div>'
+    topnav = '<a href="index.html#ladder">&larr; All steps</a>'
+    if prev:
+        topnav += f'<a href="{slug(prev)}">&larr; {prev["n"]}</a>'
+    if nxt:
+        topnav += f'<a href="{slug(nxt)}">{nxt["n"]} &rarr;</a>'
 
-    return f"""
-<article class="step" id="s{s['n']}">
-  <div class="head">
+    prev_html = (f'<a class="prev" href="{slug(prev)}"><div class="dir">&larr; Previous</div>'
+                 f'<div class="pt">{prev["n"]} &middot; {esc(prev["title"])}</div></a>'
+                 if prev else "<span></span>")
+    next_html = (f'<a class="next" href="{slug(nxt)}"><div class="dir">Next &rarr;</div>'
+                 f'<div class="pt">{nxt["n"]} &middot; {esc(nxt["title"])}</div></a>'
+                 if nxt else "<span></span>")
+
+    head = HEAD.format(
+        title=f"{s['n']} &middot; {esc(s['title'])} &mdash; Build an LLM from Scratch",
+        desc=esc(s["tag"]))
+
+    return head + f"""<header class="bar"><div class="wrap">
+  <a class="brand" href="index.html">from_scratch<b>.llm</b></a>
+  <nav>{topnav}</nav>
+</div></header>
+
+<section class="stephero"><div class="wrap">
+  <div class="crumb">{esc(s['phase'])}</div>
+  <div class="sh-head">
     <span class="nn">{s['n']}</span>
-    <div>
-      <h3>{esc(s['title'])}</h3>
-      <div class="tag">{s['tag']}</div>
-    </div>
-    <span class="file">{esc(s['file'])}</span>
+    <div><h1>{esc(s['title'])}</h1><div class="tag">{s['tag']}</div></div>
   </div>
-  <div class="body">
-    {body}
-    {eq_html}
-    {theory_html}
-    <div class="term">
-      <div class="top"><span class="dot g"></span><span class="dot"></span><span class="dot"></span>
-        <span>{esc(s['file'])}</span><span class="out-lab">output</span></div>
-      <pre>{out}</pre>
-    </div>
-    <details class="src">
-      <summary><span class="chev">&#9656;</span> View full source &middot; {esc(s['file'])}</summary>
-      <pre><code class="language-python">{src}</code></pre>
-    </details>
+  <span class="file">{esc(s['file'])}</span>
+</div></section>
+
+<section class="section"><div class="wrap stepwrap">
+  <div class="lead">{body}</div>
+  {eq_theory_html(s)}
+  <div class="term">
+    <div class="top"><span class="dot g"></span><span class="dot"></span><span class="dot"></span>
+      <span>{esc(s['file'])}</span><span class="out-lab">output</span></div>
+    <pre>{out}</pre>
   </div>
-</article>"""
+  <div class="srch">Full source &middot; <span>{esc(s['file'])}</span></div>
+  <div class="term">
+    <div class="top"><span class="dot g"></span><span class="dot"></span><span class="dot"></span>
+      <span>{esc(s['file'])}</span><span class="out-lab">source</span></div>
+    <pre><code class="language-python">{src}</code></pre>
+  </div>
+  <div class="pager">{prev_html}{next_html}</div>
+</div></section>
+
+<footer><div class="wrap">
+  <a href="index.html" style="color:var(--accent)">&larr; Back to all 17 steps</a>
+  &middot; built one runnable script at a time.
+</div></footer>
+{PRISM}</body>
+</html>"""
 
 
-def render_index():
+def render_card(s):
+    return (f'<a class="card" href="{slug(s)}"><span class="go">&rarr;</span>'
+            f'<div class="cn">{s["n"]}</div><h3>{esc(s["title"])}</h3>'
+            f'<p>{s["tag"]}</p></a>')
+
+
+def render_ladder():
     out, last = [], None
     for s in STEPS:
         if s["phase"] != last:
-            out.append(f'<div class="ph">{esc(s["phase"])}</div>')
+            if last is not None:
+                out.append("</div>")
+            cls = "phlabel first" if last is None else "phlabel"
+            out.append(f'<div class="{cls}">{esc(s["phase"])}</div><div class="grid">')
             last = s["phase"]
-        out.append(f'<a href="#s{s["n"]}"><span class="nn">{s["n"]}</span> {esc(s["title"])}</a>')
+        out.append(render_card(s))
+    out.append("</div>")
     return "\n".join(out)
 
 
-def render_steps():
-    out, last = [], None
-    for s in STEPS:
-        if s["phase"] != last:
-            out.append(f'<div class="phase-div">{esc(s["phase"])}</div>')
-            last = s["phase"]
-        out.append(render_step(s))
-    return "\n".join(out)
+def index_page():
+    """Landing page: reuse the existing hero/acts/SOTA/run/footer, but swap the
+    inline ladder for a grid of links to the per-script pages."""
+    p = PAGE
+    p = p.replace("<style>__CSS__</style>",
+                  '<link rel="stylesheet" href="styles.css">')
+    p = p.replace("Neural network &rarr; LLM &middot; in 15 steps",
+                  "Neural network &rarr; LLM &middot; in 17 steps")
+    p = p.replace(
+        "Read straight through, or jump to any rung. Each shows the idea, the real terminal output, and the full source.",
+        "Seventeen rungs, each its own page &mdash; the idea, the key formula, the theory, the real terminal output, and the full source.")
+    ladder_old = ('  <div class="ladder" style="margin-top:34px">\n'
+                  '    <nav class="index">__INDEX__</nav>\n'
+                  '    <div class="steps">__STEPS__</div>\n'
+                  '  </div>')
+    p = p.replace(ladder_old, render_ladder())
+    scripts_old = (
+        '<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-core.min.js"></script>\n'
+        '<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-clike.min.js"></script>\n'
+        '<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-python.min.js"></script>\n'
+        '<script>__JS__</script>')
+    p = p.replace(scripts_old, '<script src="app.js"></script>')
+    return p
 
 
 PAGE = """<!doctype html>
@@ -828,16 +943,19 @@ python3 -m venv .venv
 
 def main():
     DOCS.mkdir(exist_ok=True)
-    page = (PAGE
-            .replace("__CSS__", CSS)
-            .replace("__INDEX__", render_index())
-            .replace("__STEPS__", render_steps())
-            .replace("__JS__", JS))
-    (DOCS / "index.html").write_text(page, encoding="utf-8")
     (DOCS / ".nojekyll").write_text("", encoding="utf-8")
-    kb = len(page.encode("utf-8")) / 1024
-    print(f"wrote docs/index.html ({kb:.0f} KB) + docs/.nojekyll")
-    print(f"steps embedded: {len(STEPS)}")
+    (DOCS / "styles.css").write_text(CSS, encoding="utf-8")
+    (DOCS / "app.js").write_text(JS, encoding="utf-8")
+    (DOCS / "index.html").write_text(index_page(), encoding="utf-8")
+
+    for i, s in enumerate(STEPS):
+        prev = STEPS[i - 1] if i > 0 else None
+        nxt = STEPS[i + 1] if i < len(STEPS) - 1 else None
+        (DOCS / slug(s)).write_text(render_step_page(s, prev, nxt), encoding="utf-8")
+
+    print(f"wrote docs/index.html + styles.css + app.js")
+    print(f"wrote {len(STEPS)} per-script pages: "
+          f"{slug(STEPS[0])} ... {slug(STEPS[-1])}")
 
 
 if __name__ == "__main__":

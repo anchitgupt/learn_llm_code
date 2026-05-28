@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>08 &middot; The transformer block &mdash; Build an LLM from Scratch</title>
+<meta name="description" content="multi-head attention + MLP + residuals + norm">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header class="bar"><div class="wrap">
+  <a class="brand" href="index.html">from_scratch<b>.llm</b></a>
+  <nav><a href="index.html#ladder">&larr; All steps</a><a href="07_self_attention.html">&larr; 07</a><a href="09_tiny_gpt.html">09 &rarr;</a></nav>
+</div></header>
+
+<section class="stephero"><div class="wrap">
+  <div class="crumb">The Transformer</div>
+  <div class="sh-head">
+    <span class="nn">08</span>
+    <div><h1>The transformer block</h1><div class="tag">multi-head attention + MLP + residuals + norm</div></div>
+  </div>
+  <span class="file">08_transformer_block.py</span>
+</div></section>
+
+<section class="section"><div class="wrap stepwrap">
+  <div class="lead"><p>One head is the atom; the block is the molecule GPT stacks. <strong>Multi-head attention</strong> runs several heads in parallel, a <strong>feed-forward</strong> MLP lets each token think, and <strong>residual connections</strong> + <strong>layernorm</strong> make deep stacks trainable.</p>
+<p>Shape in equals shape out &mdash; which is precisely why you can stack 4, 12, or 96 of them. GPT-3 is 96 of these in a row.</p></div>
+  <div class="eq">x = x + MHA(LN(x))&emsp;&middot;&emsp;x = x + FFN(LN(x))&emsp;(pre-norm residual)<span class="cap">attention mixes across tokens; the FFN mixes across features; residuals + norm keep deep stacks trainable.</span></div><div class="theory"><div class="lab">The theory</div><p>A transformer block combines four ideas. <strong>Multi-head attention</strong> runs several attention operations in parallel low-dimensional subspaces, letting different heads specialize (one tracks the previous letter, another the start of the word), then concatenates them. The position-wise <strong>feed-forward network</strong> (two linear layers around a nonlinearity, ~4&times; wider) gives each token nonlinear processing on its own.</p><p>The other two ideas make depth <em>trainable</em>. <strong>Residual connections</strong> (<code>x = x + sublayer(x)</code>) create identity shortcuts so gradients flow through dozens of layers without vanishing, and each block only has to learn a small correction. <strong>LayerNorm</strong> normalizes each token's vector to a stable scale; applying it <em>before</em> each sublayer (pre-norm) trains more stably than after. The slogan: attention mixes information <em>across</em> tokens, the FFN processes <em>each</em> token &mdash; gather, then think, repeated N times.</p></div>
+  <div class="term">
+    <div class="top"><span class="dot g"></span><span class="dot"></span><span class="dot"></span>
+      <span>08_transformer_block.py</span><span class="out-lab">output</span></div>
+    <pre>input  shape: (2, 6, 32)
+output shape: (2, 6, 32)   &lt;- identical, so blocks stack
+4 heads, each of size 8 | 12,608 parameters
+after stacking 3 blocks: (2, 6, 32)</pre>
+  </div>
+  <div class="srch">Full source &middot; <span>08_transformer_block.py</span></div>
+  <div class="term">
+    <div class="top"><span class="dot g"></span><span class="dot"></span><span class="dot"></span>
+      <span>08_transformer_block.py</span><span class="out-lab">source</span></div>
+    <pre><code class="language-python">"""
+#8 in the "NN to tiny LLM" ladder.
+
+One attention head (#7) is the atom. A TRANSFORMER BLOCK is the molecule that
+GPT stacks N times. It adds four ideas that make deep networks actually train:
+
+  1. MULTI-HEAD ATTENTION — run several attention heads in parallel, each free
+     to focus on a different kind of relationship, then concatenate them. One
+     head might track "the previous letter", another "the start of the word".
+
+  2. FEED-FORWARD (MLP) — after tokens have GATHERED information via attention,
+     a per-token MLP THINKS about it. Attention mixes across tokens; the MLP
+     processes each token on its own. (This is your neural_network.py again.)
+
+  3. RESIDUAL CONNECTIONS — `x = x + sublayer(x)`. The block learns a small
+     adjustment to its input rather than a whole new value. This is THE trick
+     that lets us stack dozens of blocks without gradients vanishing.
+
+  4. LAYER NORM — normalize each token's vector before each sublayer to keep
+     activations at a stable scale, so training stays smooth.
+
+The shape in equals the shape out (B, T, C), which is exactly why blocks stack.
+
+Run with:  python 08_transformer_block.py
+"""
+
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+
+torch.manual_seed(0)
+
+
+class Head(nn.Module):
+    """One causal self-attention head (same as #7)."""
+
+    def __init__(self, n_embd, head_size):
+        super().__init__()
+        self.key = nn.Linear(n_embd, head_size, bias=False)
+        self.query = nn.Linear(n_embd, head_size, bias=False)
+        self.value = nn.Linear(n_embd, head_size, bias=False)
+        self.head_size = head_size
+
+    def forward(self, x):
+        B, T, C = x.shape
+        q, k, v = self.query(x), self.key(x), self.value(x)
+        scores = q @ k.transpose(-2, -1) / self.head_size ** 0.5
+        mask = torch.tril(torch.ones(T, T, device=x.device))
+        scores = scores.masked_fill(mask == 0, float("-inf"))
+        weights = F.softmax(scores, dim=-1)
+        return weights @ v
+
+
+class MultiHeadAttention(nn.Module):
+    """Several heads in parallel, concatenated and projected back to n_embd."""
+
+    def __init__(self, n_embd, n_heads):
+        super().__init__()
+        head_size = n_embd // n_heads
+        self.heads = nn.ModuleList(
+            [Head(n_embd, head_size) for _ in range(n_heads)]
+        )
+        self.proj = nn.Linear(n_embd, n_embd)   # mix the heads' outputs
+
+    def forward(self, x):
+        out = torch.cat([h(x) for h in self.heads], dim=-1)  # (B, T, n_embd)
+        return self.proj(out)
+
+
+class FeedForward(nn.Module):
+    """Per-token MLP. Expands to 4x then back — the standard transformer ratio."""
+
+    def __init__(self, n_embd):
+        super().__init__()
+        self.net = nn.Sequential(
+            nn.Linear(n_embd, 4 * n_embd),
+            nn.ReLU(),
+            nn.Linear(4 * n_embd, n_embd),
+        )
+
+    def forward(self, x):
+        return self.net(x)
+
+
+class TransformerBlock(nn.Module):
+    """Attention + feed-forward, each wrapped in (layernorm -&gt; sublayer -&gt; add).
+
+    Note the residual form `x = x + sublayer(ln(x))`: the network only has to
+    learn what to ADD to x, which is what makes very deep stacks trainable.
+    """
+
+    def __init__(self, n_embd, n_heads):
+        super().__init__()
+        self.ln1 = nn.LayerNorm(n_embd)
+        self.attn = MultiHeadAttention(n_embd, n_heads)
+        self.ln2 = nn.LayerNorm(n_embd)
+        self.ffwd = FeedForward(n_embd)
+
+    def forward(self, x):
+        x = x + self.attn(self.ln1(x))   # tokens gather info from each other
+        x = x + self.ffwd(self.ln2(x))   # each token then thinks on its own
+        return x
+
+
+if __name__ == "__main__":
+    B, T, C = 2, 6, 32      # batch, tokens, embedding dim
+    n_heads = 4
+    x = torch.randn(B, T, C)
+
+    block = TransformerBlock(n_embd=C, n_heads=n_heads)
+    out = block(x)
+
+    n_params = sum(p.numel() for p in block.parameters())
+    print(f"input  shape: {tuple(x.shape)}")
+    print(f"output shape: {tuple(out.shape)}   &lt;- identical, so blocks stack")
+    print(f"{n_heads} heads, each of size {C // n_heads}")
+    print(f"block parameters: {n_params}\n")
+
+    # Demonstrate stacking: feed the output straight into more blocks.
+    blocks = nn.Sequential(*[TransformerBlock(C, n_heads) for _ in range(3)])
+    deep_out = blocks(x)
+    print(f"after stacking 3 blocks: {tuple(deep_out.shape)}  (still B, T, C)")
+    print("\nStacking N of these — plus embeddings and a final classifier — IS")
+    print("a GPT. That's exactly what we assemble in #9.")
+</code></pre>
+  </div>
+  <div class="pager"><a class="prev" href="07_self_attention.html"><div class="dir">&larr; Previous</div><div class="pt">07 &middot; Self-attention</div></a><a class="next" href="09_tiny_gpt.html"><div class="dir">Next &rarr;</div><div class="pt">09 &middot; A real GPT</div></a></div>
+</div></section>
+
+<footer><div class="wrap">
+  <a href="index.html" style="color:var(--accent)">&larr; Back to all 17 steps</a>
+  &middot; built one runnable script at a time.
+</div></footer>
+
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-core.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-clike.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-python.min.js"></script>
+</body>
+</html>

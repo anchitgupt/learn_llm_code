@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>02 &middot; The same model, learned &mdash; Build an LLM from Scratch</title>
+<meta name="description" content="softmax + cross-entropy via gradient descent">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header class="bar"><div class="wrap">
+  <a class="brand" href="index.html">from_scratch<b>.llm</b></a>
+  <nav><a href="index.html#ladder">&larr; All steps</a><a href="01_bigram_counts.html">&larr; 01</a><a href="03_tokenizer.html">03 &rarr;</a></nav>
+</div></header>
+
+<section class="stephero"><div class="wrap">
+  <div class="crumb">From neural net to language</div>
+  <div class="sh-head">
+    <span class="nn">02</span>
+    <div><h1>The same model, learned</h1><div class="tag">softmax + cross-entropy via gradient descent</div></div>
+  </div>
+  <span class="file">02_bigram_nn.py</span>
+</div></section>
+
+<section class="section"><div class="wrap stepwrap">
+  <div class="lead"><p>Now we solve the <em>same</em> bigram task with a neural network trained by gradient descent &mdash; and it converges to the same answer the counting found. Two different methods, one truth.</p>
+<p>This introduces the permanent LLM toolkit: <strong>softmax</strong> (scores &rarr; probabilities) and <strong>cross-entropy loss</strong> (the universal next-token objective). Counting is the closed form; gradient descent is the general tool that keeps working when models get too complex to count.</p></div>
+  <div class="eq">softmax(z)&#7522; = exp(z&#7522;) / &Sigma;&#11388; exp(z&#11388;)&emsp;&middot;&emsp;L = &minus;log p(target)&emsp;&middot;&emsp;&part;L/&part;z = p &minus; y<span class="cap">cross-entropy = negative log-likelihood; its gradient through softmax is simply p &minus; y.</span></div><div class="theory"><div class="lab">The theory</div><p>Here the bigram is <em>learned</em> instead of counted. The model maps a one-hot input through a weight matrix to <strong>logits</strong>, which <strong>softmax</strong> turns into a probability distribution. Training minimizes <strong>cross-entropy</strong> &mdash; the negative log-probability assigned to the true next token. Minimizing cross-entropy is identical to maximizing likelihood, the very objective the counting model solves in closed form &mdash; which is why the two converge to the same answer.</p><p>The gradient of softmax-plus-cross-entropy is famously clean: <code>predicted &minus; actual</code>. Each row of the weight matrix is effectively learning the log-probabilities of the next token (a per-row logistic regression). The point isn't that gradient descent beats counting here &mdash; it ties it &mdash; but that gradient descent is the <em>general</em> tool that keeps working once the model is too complex to count.</p></div>
+  <div class="term">
+    <div class="top"><span class="dot g"></span><span class="dot"></span><span class="dot"></span>
+      <span>02_bigram_nn.py</span><span class="out-lab">output</span></div>
+    <pre>epoch    0  loss 3.8114
+epoch  100  loss 1.6104
+epoch  180  loss 1.5931
+
+Generated names:
+  maria   liliar   oler   naria</pre>
+  </div>
+  <div class="srch">Full source &middot; <span>02_bigram_nn.py</span></div>
+  <div class="term">
+    <div class="top"><span class="dot g"></span><span class="dot"></span><span class="dot"></span>
+      <span>02_bigram_nn.py</span><span class="out-lab">source</span></div>
+    <pre><code class="language-python">"""
+#2 in the "NN to tiny LLM" ladder.
+
+Same bigram task as #1, but instead of COUNTING transitions we LEARN them with
+a neural network trained by gradient descent — exactly the machinery from your
+XOR net (neural_network.py), now applied to language.
+
+The remarkable result: a single-layer net trained this way converges to the
+SAME probabilities the counting model found. This proves the two views are one
+idea. Counting is the closed-form answer; gradient descent is the general tool
+that keeps working once models get too complex to count.
+
+Key new concepts vs #1:
+  - one-hot encoding   : represent a character as a vector
+  - softmax            : turn raw network outputs into probabilities
+  - cross-entropy loss : the standard loss for "predict the next token"
+
+Run with:  python bigram_nn.py
+"""
+
+import numpy as np
+
+WORDS = [
+    "emma", "olivia", "ava", "isabella", "sophia", "mia", "amelia", "harper",
+    "liam", "noah", "oliver", "william", "james", "benjamin", "lucas", "henry",
+    "anna", "anya", "maria", "elena", "nina", "sara", "leo", "max", "ella",
+]
+
+CHARS = ["."] + sorted("abcdefghijklmnopqrstuvwxyz")
+STOI = {c: i for i, c in enumerate(CHARS)}
+ITOS = {i: c for c, i in STOI.items()}
+VOCAB = len(CHARS)  # 27
+
+
+def build_dataset(words):
+    """Flatten all words into (input_char, target_char) index pairs."""
+    xs, ys = [], []
+    for word in words:
+        symbols = ["."] + list(word) + ["."]
+        for current, nxt in zip(symbols, symbols[1:]):
+            xs.append(STOI[current])
+            ys.append(STOI[nxt])
+    return np.array(xs), np.array(ys)
+
+
+def one_hot(indices, n):
+    """Turn a list of indices into rows of 0s with a single 1 (the 'on' char)."""
+    out = np.zeros((len(indices), n))
+    out[np.arange(len(indices)), indices] = 1
+    return out
+
+
+def softmax(logits):
+    """Turn raw scores ('logits') into probabilities that sum to 1 per row."""
+    logits = logits - logits.max(axis=1, keepdims=True)   # stability trick
+    exp = np.exp(logits)
+    return exp / exp.sum(axis=1, keepdims=True)
+
+
+def train(xs, ys, epochs=200, lr=20.0):
+    """Train a single weight matrix W mapping input char -&gt; next-char scores.
+
+    W has shape (27, 27): one column of scores per possible next character.
+    Because the input is one-hot, `X @ W` simply selects the relevant row of W,
+    so this net is literally learning a probability table — the same table #1
+    counted, but discovered through gradient descent.
+    """
+    rng = np.random.default_rng(0)
+    W = rng.normal(size=(VOCAB, VOCAB))
+    X = one_hot(xs, VOCAB)          # (N, 27)
+    n = len(xs)
+
+    for epoch in range(epochs):
+        # --- Forward pass ---
+        logits = X @ W              # (N, 27) raw scores for each next char
+        probs = softmax(logits)     # (N, 27) probabilities
+
+        # --- Cross-entropy loss: -log(probability assigned to the TRUE char) ---
+        loss = -np.mean(np.log(probs[np.arange(n), ys] + 1e-9))
+
+        # --- Backward pass ---
+        # Gradient of softmax + cross-entropy is beautifully simple:
+        # (predicted prob - 1 for the true class), averaged over the batch.
+        d_logits = probs.copy()
+        d_logits[np.arange(n), ys] -= 1
+        d_logits /= n
+        d_W = X.T @ d_logits
+
+        # --- Gradient descent update ---
+        W -= lr * d_W
+
+        if epoch % 20 == 0:
+            print(f"epoch {epoch:4d}  loss {loss:.4f}")
+
+    return W
+
+
+def generate(W, rng, max_len=20):
+    """Sample a new word from the trained net, one character at a time."""
+    index = 0
+    out = []
+    for _ in range(max_len):
+        logits = one_hot([index], VOCAB) @ W
+        probs = softmax(logits)[0]
+        index = rng.choice(VOCAB, p=probs)
+        if index == 0:
+            break
+        out.append(ITOS[index])
+    return "".join(out)
+
+
+if __name__ == "__main__":
+    xs, ys = build_dataset(WORDS)
+    W = train(xs, ys)
+
+    print("\nGenerated names:")
+    rng = np.random.default_rng(0)
+    for _ in range(100):
+        print("  " + generate(W, rng))
+</code></pre>
+  </div>
+  <div class="pager"><a class="prev" href="01_bigram_counts.html"><div class="dir">&larr; Previous</div><div class="pt">01 &middot; The simplest language model</div></a><a class="next" href="03_tokenizer.html"><div class="dir">Next &rarr;</div><div class="pt">03 &middot; Turning text into numbers</div></a></div>
+</div></section>
+
+<footer><div class="wrap">
+  <a href="index.html" style="color:var(--accent)">&larr; Back to all 17 steps</a>
+  &middot; built one runnable script at a time.
+</div></footer>
+
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-core.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-clike.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-python.min.js"></script>
+</body>
+</html>

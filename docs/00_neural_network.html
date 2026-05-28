@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>00 &middot; A neural network &mdash; Build an LLM from Scratch</title>
+<meta name="description" content="forward pass + backprop, learning XOR">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header class="bar"><div class="wrap">
+  <a class="brand" href="index.html">from_scratch<b>.llm</b></a>
+  <nav><a href="index.html#ladder">&larr; All steps</a><a href="01_bigram_counts.html">01 &rarr;</a></nav>
+</div></header>
+
+<section class="stephero"><div class="wrap">
+  <div class="crumb">Foundation</div>
+  <div class="sh-head">
+    <span class="nn">00</span>
+    <div><h1>A neural network</h1><div class="tag">forward pass + backprop, learning XOR</div></div>
+  </div>
+  <span class="file">00_neural_network.py</span>
+</div></section>
+
+<section class="section"><div class="wrap stepwrap">
+  <div class="lead"><p>Every LLM is, at bottom, a neural network trained by gradient descent. So we start at the true atom: a two-layer net that learns <strong>XOR</strong> &mdash; the classic problem a single linear layer <em>cannot</em> solve.</p>
+<p>It contains the three ideas that never leave: a <strong>forward pass</strong> (predict), a <strong>loss</strong> (measure wrongness), and <strong>backpropagation</strong> (nudge every weight downhill). Written in pure NumPy so nothing hides.</p></div>
+  <div class="eq">a = &sigma;(W&middot;x + b)&emsp;&middot;&emsp;&sigma;&prime;(z) = &sigma;(z)(1 &minus; &sigma;(z))&emsp;&middot;&emsp;w &larr; w &minus; &eta;&nbsp;&part;L/&part;w<span class="cap">a neuron: weighted sum &rarr; nonlinearity; trained by gradient descent on the loss.</span></div><div class="theory"><div class="lab">The theory</div><p>A neuron computes a weighted sum of its inputs and passes it through a nonlinear <em>activation</em>. Stacking a hidden layer of these between input and output makes the network a <strong>universal function approximator</strong> &mdash; with enough hidden units it can represent any continuous function. The nonlinearity is essential: without it, stacked linear layers collapse into a single linear map.</p><p>Learning means minimizing a <strong>loss</strong> (here, mean-squared error) by gradient descent. <strong>Backpropagation</strong> is just the chain rule applied in reverse: compute how the loss depends on each weight, layer by layer from output back to input, then nudge every weight a small step <em>against</em> its gradient. XOR is the canonical test because it is <em>not linearly separable</em> &mdash; a single layer cannot solve it, but a hidden layer learns the intermediate features that can.</p></div>
+  <div class="term">
+    <div class="top"><span class="dot g"></span><span class="dot"></span><span class="dot"></span>
+      <span>00_neural_network.py</span><span class="out-lab">output</span></div>
+    <pre>Final predictions:
+  [0 0] -&gt; 0.009  (rounded: 0)
+  [0 1] -&gt; 0.984  (rounded: 1)
+  [1 0] -&gt; 0.986  (rounded: 1)
+  [1 1] -&gt; 0.019  (rounded: 0)</pre>
+  </div>
+  <div class="srch">Full source &middot; <span>00_neural_network.py</span></div>
+  <div class="term">
+    <div class="top"><span class="dot g"></span><span class="dot"></span><span class="dot"></span>
+      <span>00_neural_network.py</span><span class="out-lab">source</span></div>
+    <pre><code class="language-python">"""
+A tiny neural network from scratch — learns the XOR function.
+
+XOR is the classic "hello world" of neural nets: it's NOT linearly separable,
+so a single layer can't solve it. A hidden layer can. This script shows the
+full mechanics — forward pass, loss, and backpropagation — in pure NumPy.
+
+Run with:  python neural_network.py
+"""
+
+import numpy as np
+
+
+def sigmoid(x):
+    """Squashes any number into the range (0, 1) — our activation function."""
+    return 1 / (1 + np.exp(-x))
+
+
+def sigmoid_derivative(out):
+    """Gradient of sigmoid, expressed in terms of its OUTPUT (out = sigmoid(x))."""
+    return out * (1 - out)
+
+
+class NeuralNetwork:
+    """A 2-layer feedforward net: input -&gt; hidden -&gt; output."""
+
+    def __init__(self, n_inputs, n_hidden, n_outputs, seed=42):
+        rng = np.random.default_rng(seed)
+        # Weights are small random values; biases start at zero.
+        # W1 connects inputs -&gt; hidden, W2 connects hidden -&gt; output.
+        self.W1 = rng.normal(size=(n_inputs, n_hidden))
+        self.b1 = np.zeros((1, n_hidden))
+        self.W2 = rng.normal(size=(n_hidden, n_outputs))
+        self.b2 = np.zeros((1, n_outputs))
+
+    def forward(self, X):
+        """Push inputs through the network to get a prediction."""
+        self.z1 = X @ self.W1 + self.b1     # weighted sum into hidden layer
+        self.a1 = sigmoid(self.z1)          # hidden layer activations
+        self.z2 = self.a1 @ self.W2 + self.b2  # weighted sum into output
+        self.a2 = sigmoid(self.z2)          # final prediction
+        return self.a2
+
+    def train(self, X, y, epochs=10000, lr=0.5):
+        """Learn the weights via gradient descent + backpropagation."""
+        for epoch in range(epochs):
+            # --- Forward pass: compute predictions ---
+            pred = self.forward(X)
+
+            # --- Loss: mean squared error (how wrong we are) ---
+            loss = np.mean((y - pred) ** 2)
+
+            # --- Backward pass: how should each weight change? ---
+            # Chain rule from the loss back to every parameter.
+            d_pred = (pred - y) * sigmoid_derivative(self.a2)   # error at output
+            d_W2 = self.a1.T @ d_pred
+            d_b2 = np.sum(d_pred, axis=0, keepdims=True)
+
+            d_hidden = (d_pred @ self.W2.T) * sigmoid_derivative(self.a1)  # error at hidden
+            d_W1 = X.T @ d_hidden
+            d_b1 = np.sum(d_hidden, axis=0, keepdims=True)
+
+            # --- Gradient descent: nudge weights opposite the gradient ---
+            self.W2 -= lr * d_W2
+            self.b2 -= lr * d_b2
+            self.W1 -= lr * d_W1
+            self.b1 -= lr * d_b1
+
+            if epoch % 1000 == 0:
+                print(f"epoch {epoch:5d}  loss {loss:.4f}")
+
+
+if __name__ == "__main__":
+    # The 4 XOR examples: output is 1 only when inputs differ.
+    X = np.array([[0, 0], [0, 1], [1, 0], [1, 1]])
+    y = np.array([[0], [1], [1], [0]])
+
+    net = NeuralNetwork(n_inputs=2, n_hidden=4, n_outputs=1)
+    net.train(X, y)
+
+    print("\nFinal predictions:")
+    for inputs, prediction in zip(X, net.forward(X)):
+        print(f"  {inputs} -&gt; {prediction[0]:.3f}  (rounded: {round(prediction[0])})")
+</code></pre>
+  </div>
+  <div class="pager"><span></span><a class="next" href="01_bigram_counts.html"><div class="dir">Next &rarr;</div><div class="pt">01 &middot; The simplest language model</div></a></div>
+</div></section>
+
+<footer><div class="wrap">
+  <a href="index.html" style="color:var(--accent)">&larr; Back to all 17 steps</a>
+  &middot; built one runnable script at a time.
+</div></footer>
+
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-core.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-clike.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-python.min.js"></script>
+</body>
+</html>

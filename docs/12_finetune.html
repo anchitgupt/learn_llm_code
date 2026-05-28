@@ -1,0 +1,226 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>12 &middot; Instruction tuning &mdash; Build an LLM from Scratch</title>
+<meta name="description" content="base model → assistant (the ChatGPT leap)">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header class="bar"><div class="wrap">
+  <a class="brand" href="index.html">from_scratch<b>.llm</b></a>
+  <nav><a href="index.html#ladder">&larr; All steps</a><a href="11_train_loop.html">&larr; 11</a><a href="13_dpo.html">13 &rarr;</a></nav>
+</div></header>
+
+<section class="stephero"><div class="wrap">
+  <div class="crumb">Make it usable</div>
+  <div class="sh-head">
+    <span class="nn">12</span>
+    <div><h1>Instruction tuning</h1><div class="tag">base model → assistant (the ChatGPT leap)</div></div>
+  </div>
+  <span class="file">12_finetune.py</span>
+</div></section>
+
+<section class="section"><div class="wrap stepwrap">
+  <div class="lead"><p>A base model only continues text. The step that made ChatGPT is <strong>instruction tuning</strong>: fine-tune on (instruction, response) pairs, with <strong>loss masking</strong> so the model is trained only on the <em>answer</em>, not the question.</p>
+<p>Same weights, one nudge &mdash; but now it follows commands instead of rambling. Ask the base model to 'say hello' and it quotes Shakespeare; the tuned model replies politely.</p></div>
+  <div class="eq">maximize  P(response | instruction)&emsp;&middot;&emsp;loss on response tokens only (mask the prompt)<span class="cap">supervised fine-tuning turns a text-continuer into an instruction-follower.</span></div><div class="theory"><div class="lab">The theory</div><p>A pretrained <strong>base model</strong> models P(text) &mdash; it <em>continues</em> whatever you give it, it doesn't obey. <strong>Supervised fine-tuning (SFT)</strong> keeps training that same model on curated (instruction, response) pairs wrapped in a fixed template, teaching the conditional distribution P(response | instruction). It's still ordinary next-token cross-entropy &mdash; only the data has changed.</p><p>The crucial trick is <strong>loss masking</strong>: gradients are computed only on the <em>response</em> tokens (the prompt's labels are ignored), so the model learns to <em>answer</em> a question rather than to generate more questions. This single step &mdash; one nudge on top of a base model &mdash; is what turned GPT-3 into InstructGPT and, ultimately, ChatGPT.</p></div>
+  <div class="term">
+    <div class="top"><span class="dot g"></span><span class="dot"></span><span class="dot"></span>
+      <span>12_finetune.py</span><span class="out-lab">output</span></div>
+    <pre>BASE model, ask 'say hello':
+  -&gt; 'I will not the world and the words,'
+
+FINE-TUNED model:
+  Q: say hello
+  A: good morrow to you, friend.
+  Q: what is love
+  A: love is a gentle madness.</pre>
+  </div>
+  <div class="srch">Full source &middot; <span>12_finetune.py</span></div>
+  <div class="term">
+    <div class="top"><span class="dot g"></span><span class="dot"></span><span class="dot"></span>
+      <span>12_finetune.py</span><span class="out-lab">source</span></div>
+    <pre><code class="language-python">"""
+#12 in the "NN to tiny LLM" ladder.  *** THE FINALE: base model -&gt; assistant ***
+
+Everything so far produces a BASE model: give it text, it continues the text.
+That's autocomplete, not an assistant. The step that turned GPT-3 into ChatGPT
+is INSTRUCTION FINE-TUNING: keep training the base model on (instruction,
+response) pairs so it learns to RESPOND rather than ramble.
+
+Three ideas make it work, all visible below:
+
+  1. A PROMPT TEMPLATE — wrap every example in a fixed format so the model
+     learns where the question ends and the answer begins:
+         QUESTION: &lt;instruction&gt;
+         ANSWER:   &lt;response&gt;
+
+  2. LOSS MASKING — we only compute loss on the ANSWER tokens (the prompt
+     tokens are set to ignore_index=-100). The model shouldn't be trained to
+     generate the question; only to produce a good answer to it. This is the
+     single most important trick in instruction tuning.
+
+  3. START FROM THE BASE MODEL — we load tiny_gpt.pt (transfer learning) and
+     nudge it, rather than training from scratch. It already knows how letters
+     and words work; we only teach it the new BEHAVIOUR of answering.
+
+HONEST CAVEAT: our base model is tiny (465K params) and trained only on
+Shakespeare, and we use a handful of examples — so this MEMORISES the format
+and answers rather than generalising. That's fine: the goal is to SEE the
+mechanism. Real instruction tuning is this exact code, with a big base model
+and thousands of diverse examples.
+
+Run with:  python 12_finetune.py   (requires tiny_gpt.pt from running #9 first)
+"""
+
+import importlib.util
+import os
+
+import torch
+import torch.nn.functional as F
+
+# Reuse the model, tokenizer, and config from #9.
+spec = importlib.util.spec_from_file_location("tiny_gpt", "09_tiny_gpt.py")
+tg = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(tg)
+
+DEVICE = tg.DEVICE
+BLOCK_SIZE = tg.BLOCK_SIZE
+CHAT_PATH = "tiny_gpt_chat.pt"     # the fine-tuned ("chat") model
+
+FINETUNE_STEPS = 1200
+LR = 1e-3
+
+# Instruction -&gt; response pairs. (Kept to characters our Shakespeare vocab
+# knows: letters, space, comma, period. No digits/symbols outside the vocab.)
+PAIRS = [
+    ("say hello",        "good morrow to you, friend."),
+    ("who are you",      "i am your humble servant."),
+    ("how are you",      "i am well, i thank you."),
+    ("say farewell",     "farewell, and good night."),
+    ("praise the king",  "long live the noble king."),
+    ("are you happy",    "yes, my heart is glad."),
+    ("what is love",     "love is a gentle madness."),
+    ("good night",       "sleep well, sweet friend."),
+]
+
+
+def prompt_of(instruction):
+    """The fixed template. Generation feeds everything up to 'ANSWER: '."""
+    return f"QUESTION: {instruction}\nANSWER: "
+
+
+def make_example(instruction, response):
+    """Build (x, y) where y masks the prompt so loss falls only on the answer."""
+    prompt = prompt_of(instruction)
+    full = prompt + response + "\n"
+    ids = tg.encode(full)
+    assert len(ids) &lt;= BLOCK_SIZE + 1, f"example too long: {full!r}"
+
+    x = torch.tensor(ids[:-1], device=DEVICE)
+    y = torch.tensor(ids[1:], device=DEVICE)
+    # Mask every target that lies in the prompt region: -100 is ignored by
+    # cross_entropy, so no gradient comes from predicting the question.
+    prompt_len = len(tg.encode(prompt))
+    y[:prompt_len - 1] = -100
+    return x.unsqueeze(0), y.unsqueeze(0)
+
+
+def finetune():
+    """Load the base model and instruction-tune it; save to CHAT_PATH."""
+    model = tg.TinyGPT().to(DEVICE)
+    base = torch.load(tg.CKPT_PATH, map_location=DEVICE)
+    model.load_state_dict(base["model"])     # &lt;-- start from the BASE model
+    print(f"loaded base model from {tg.CKPT_PATH}; instruction-tuning...\n")
+
+    optimizer = torch.optim.AdamW(model.parameters(), lr=LR)
+    model.train()
+    for step in range(FINETUNE_STEPS + 1):
+        instruction, response = PAIRS[torch.randint(len(PAIRS), (1,)).item()]
+        x, y = make_example(instruction, response)
+
+        logits, _ = model(x)                 # (1, T, vocab)
+        loss = F.cross_entropy(
+            logits.view(-1, logits.size(-1)), y.view(-1), ignore_index=-100
+        )
+        optimizer.zero_grad(set_to_none=True)
+        loss.backward()
+        optimizer.step()
+
+        if step % 200 == 0:
+            print(f"step {step:4d}  answer-loss {loss.item():.3f}")
+
+    torch.save({"model": model.state_dict(), "chars": tg.chars}, CHAT_PATH)
+    print(f"\nsaved fine-tuned chat model -&gt; {CHAT_PATH}")
+    return model
+
+
+@torch.no_grad()
+def answer(model, instruction, max_new=60):
+    """Greedy-decode an answer to one instruction, stopping at the newline."""
+    prompt = prompt_of(instruction)
+    idx = torch.tensor([tg.encode(prompt)], device=DEVICE)
+    for _ in range(max_new):
+        logits, _ = model(idx[:, -BLOCK_SIZE:])
+        next_id = logits[:, -1, :].argmax(dim=-1, keepdim=True)
+        if tg.itos[next_id.item()] == "\n":
+            break
+        idx = torch.cat([idx, next_id], dim=1)
+    full = tg.decode(idx[0].tolist())
+    return full[len(prompt):]
+
+
+def load_or_finetune():
+    if os.path.exists(CHAT_PATH):
+        model = tg.TinyGPT().to(DEVICE)
+        model.load_state_dict(torch.load(CHAT_PATH, map_location=DEVICE)["model"])
+        print(f"loaded fine-tuned model from {CHAT_PATH} "
+              f"(delete it to re-finetune)\n")
+        return model
+    if not os.path.exists(tg.CKPT_PATH):
+        raise SystemExit("No tiny_gpt.pt — run `python 09_tiny_gpt.py` first.")
+    return finetune()
+
+
+if __name__ == "__main__":
+    model = load_or_finetune()
+    model.eval()
+
+    print("=" * 60)
+    print("BASE model (tiny_gpt.pt) answering — it ignores instructions:")
+    print("=" * 60)
+    base = tg.TinyGPT().to(DEVICE)
+    base.load_state_dict(torch.load(tg.CKPT_PATH, map_location=DEVICE)["model"])
+    base.eval()
+    print(f"  ask: 'say hello'\n  -&gt;{answer(base, 'say hello')!r}\n")
+
+    print("=" * 60)
+    print("FINE-TUNED model answering the SAME template — now it responds:")
+    print("=" * 60)
+    for instruction, _ in PAIRS:
+        print(f"  Q: {instruction}")
+        print(f"  A:{answer(model, instruction)}\n")
+
+    print("Same architecture, same weights+a nudge — but masking the loss onto")
+    print("the answers taught it to FOLLOW INSTRUCTIONS. That nudge, at scale,")
+    print("is the difference between GPT-3 and ChatGPT.")
+</code></pre>
+  </div>
+  <div class="pager"><a class="prev" href="11_train_loop.html"><div class="dir">&larr; Previous</div><div class="pt">11 &middot; Production training</div></a><a class="next" href="13_dpo.html"><div class="dir">Next &rarr;</div><div class="pt">13 &middot; Preference tuning with DPO</div></a></div>
+</div></section>
+
+<footer><div class="wrap">
+  <a href="index.html" style="color:var(--accent)">&larr; Back to all 17 steps</a>
+  &middot; built one runnable script at a time.
+</div></footer>
+
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-core.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-clike.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-python.min.js"></script>
+</body>
+</html>

@@ -1,0 +1,187 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>10 &middot; Sampling strategies &mdash; Build an LLM from Scratch</title>
+<meta name="description" content="temperature, top-k, top-p — one model, many writers">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header class="bar"><div class="wrap">
+  <a class="brand" href="index.html">from_scratch<b>.llm</b></a>
+  <nav><a href="index.html#ladder">&larr; All steps</a><a href="09_tiny_gpt.html">&larr; 09</a><a href="11_train_loop.html">11 &rarr;</a></nav>
+</div></header>
+
+<section class="stephero"><div class="wrap">
+  <div class="crumb">Make it usable</div>
+  <div class="sh-head">
+    <span class="nn">10</span>
+    <div><h1>Sampling strategies</h1><div class="tag">temperature, top-k, top-p — one model, many writers</div></div>
+  </div>
+  <span class="file">10_sampling.py</span>
+</div></section>
+
+<section class="section"><div class="wrap stepwrap">
+  <div class="lead"><p>A trained model outputs a probability for every next token; <em>how</em> you pick from them transforms the text without touching a single weight. <strong>Greedy</strong> loops forever; <strong>temperature</strong> trades safety for creativity; <strong>top-k</strong> and <strong>top-p</strong> hit the sweet spot.</p>
+<p>This is exactly the <code>temperature</code> / <code>top_p</code> knob you set when calling an LLM API. The model is frozen &mdash; you're reshaping how it samples from itself.</p></div>
+  <div class="eq">p &prop; exp(logits / T)&emsp;&middot;&emsp;top-k: keep k highest&emsp;&middot;&emsp;top-p: smallest set with &Sigma;p &ge; p<span class="cap">decoding shapes the model's own distribution; the weights never change.</span></div><div class="theory"><div class="lab">The theory</div><p>Once trained, the model gives a distribution over the next token; <strong>decoding</strong> decides how to pick from it. Greedy (argmax) maximizes each local step but produces repetitive, globally sub-optimal text, and beam search &mdash; great for translation &mdash; degenerates for open-ended generation. So we sample, but shape the distribution first.</p><p><strong>Temperature</strong> T divides the logits before softmax: T&nbsp;&lt;&nbsp;1 sharpens toward the top choices (safer, more repetitive), T&nbsp;&gt;&nbsp;1 flattens them (wilder, more diverse), and T&rarr;0 recovers greedy. <strong>Truncation</strong> then trims the unreliable tail &mdash; <em>top-k</em> keeps the k most likely tokens, <em>top-p</em> (nucleus) keeps the smallest set whose probability mass exceeds p, adapting how many options it considers to how confident the model is. None of this touches the weights; it's purely how you read the same model.</p></div>
+  <div class="term">
+    <div class="top"><span class="dot g"></span><span class="dot"></span><span class="dot"></span>
+      <span>10_sampling.py</span><span class="out-lab">output</span></div>
+    <pre>GREEDY  (gets stuck):
+  the world of the world of the world...
+
+TEMPERATURE 1.5  (wild, creative):
+  thyremh, discops: LeWlooke me hand
+
+TOP-P 0.9  (coherent and varied):
+  KING HENRY VI: There shall seek so your way</pre>
+  </div>
+  <div class="srch">Full source &middot; <span>10_sampling.py</span></div>
+  <div class="term">
+    <div class="top"><span class="dot g"></span><span class="dot"></span><span class="dot"></span>
+      <span>10_sampling.py</span><span class="out-lab">source</span></div>
+    <pre><code class="language-python">"""
+#10 in the "NN to tiny LLM" ladder.
+
+A trained model outputs a probability for every possible next token. HOW we
+pick from that distribution dramatically changes the text — without touching
+the weights at all. These are the "generation" or "decoding" strategies, and
+they're exactly the knobs an API like ChatGPT exposes (temperature, top_p...).
+
+  - GREEDY            : always take the single most likely token. Safe but
+                        repetitive, often loops.
+  - TEMPERATURE       : divide the logits by T before softmax.
+                        T&lt;1 -&gt; sharper/safer, T&gt;1 -&gt; flatter/wilder, T=1 -&gt; raw.
+  - TOP-K             : keep only the k most likely tokens, sample among them.
+  - TOP-P (nucleus)   : keep the smallest set of tokens whose probabilities sum
+                        to p, sample among them. Adapts how many options it
+                        considers to how confident the model is.
+
+We LOAD the model trained in #9 (tiny_gpt.pt) — no retraining — and compare the
+strategies side by side on the same seed.
+
+Run with:  python 10_sampling.py   (requires tiny_gpt.pt from running #9 first)
+"""
+
+import importlib.util
+import os
+
+import torch
+import torch.nn.functional as F
+
+# 09_tiny_gpt.py starts with a digit, so it can't be imported normally.
+# Load it as a module to reuse its TinyGPT class, tokenizer, and config.
+spec = importlib.util.spec_from_file_location("tiny_gpt", "09_tiny_gpt.py")
+tg = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(tg)
+
+DEVICE = tg.DEVICE
+BLOCK_SIZE = tg.BLOCK_SIZE
+
+
+def load_model():
+    if not os.path.exists(tg.CKPT_PATH):
+        raise SystemExit("No tiny_gpt.pt found — run `python 09_tiny_gpt.py` first.")
+    model = tg.TinyGPT().to(DEVICE)
+    ckpt = torch.load(tg.CKPT_PATH, map_location=DEVICE)
+    model.load_state_dict(ckpt["model"])
+    model.eval()
+    return model
+
+
+@torch.no_grad()
+def sample(model, n_tokens=300, temperature=1.0, top_k=None, top_p=None, seed=0):
+    """Generate text using the chosen decoding strategy."""
+    torch.manual_seed(seed)
+    idx = torch.zeros((1, 1), dtype=torch.long, device=DEVICE)  # newline seed
+
+    for _ in range(n_tokens):
+        logits, _ = model(idx[:, -BLOCK_SIZE:])
+        logits = logits[:, -1, :]                  # scores for the next token
+
+        # TEMPERATURE: scale logits. Lower = more confident/repetitive.
+        logits = logits / max(temperature, 1e-6)
+
+        # TOP-K: zero out everything except the k highest-scoring tokens.
+        if top_k is not None:
+            kth = torch.topk(logits, top_k).values[:, -1, None]
+            logits = logits.masked_fill(logits &lt; kth, float("-inf"))
+
+        probs = F.softmax(logits, dim=-1)
+
+        # TOP-P (nucleus): keep the smallest set of tokens covering prob mass p.
+        if top_p is not None:
+            sorted_probs, sorted_idx = torch.sort(probs, descending=True)
+            cumulative = torch.cumsum(sorted_probs, dim=-1)
+            remove = cumulative - sorted_probs &gt; top_p   # keep through the crossover
+            sorted_probs[remove] = 0
+            probs = torch.zeros_like(probs).scatter(1, sorted_idx, sorted_probs)
+            probs = probs / probs.sum(dim=-1, keepdim=True)
+
+        next_id = torch.multinomial(probs, num_samples=1)
+        idx = torch.cat([idx, next_id], dim=1)
+
+    return tg.decode(idx[0].tolist())
+
+
+@torch.no_grad()
+def sample_greedy(model, n_tokens=300):
+    """Always pick the argmax — deterministic, tends to repeat."""
+    idx = torch.zeros((1, 1), dtype=torch.long, device=DEVICE)
+    for _ in range(n_tokens):
+        logits, _ = model(idx[:, -BLOCK_SIZE:])
+        next_id = logits[:, -1, :].argmax(dim=-1, keepdim=True)
+        idx = torch.cat([idx, next_id], dim=1)
+    return tg.decode(idx[0].tolist())
+
+
+def show(title, text):
+    print(f"\n{'=' * 60}\n{title}\n{'=' * 60}")
+    print(text.strip())
+
+
+if __name__ == "__main__":
+    model = load_model()
+    print(f"loaded {tg.CKPT_PATH} — comparing decoding strategies "
+          f"(no retraining)\n")
+
+    show("GREEDY  (always the top token — watch it get stuck/repeat)",
+         sample_greedy(model, 250))
+
+    show("TEMPERATURE 0.5  (timid, safe, more repetitive)",
+         sample(model, 250, temperature=0.5))
+
+    show("TEMPERATURE 1.0  (the raw distribution)",
+         sample(model, 250, temperature=1.0))
+
+    show("TEMPERATURE 1.5  (wild, creative, more typos)",
+         sample(model, 250, temperature=1.5))
+
+    show("TOP-K = 10  (only the 10 likeliest tokens each step)",
+         sample(model, 250, top_k=10))
+
+    show("TOP-P = 0.9  (nucleus: adaptive shortlist)",
+         sample(model, 250, top_p=0.9))
+
+    print("\n\nSame weights, six different writers. This is why one model can "
+          "be\nmade 'creative' or 'precise' just by changing decoding settings.")
+</code></pre>
+  </div>
+  <div class="pager"><a class="prev" href="09_tiny_gpt.html"><div class="dir">&larr; Previous</div><div class="pt">09 &middot; A real GPT</div></a><a class="next" href="11_train_loop.html"><div class="dir">Next &rarr;</div><div class="pt">11 &middot; Production training</div></a></div>
+</div></section>
+
+<footer><div class="wrap">
+  <a href="index.html" style="color:var(--accent)">&larr; Back to all 17 steps</a>
+  &middot; built one runnable script at a time.
+</div></footer>
+
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-core.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-clike.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-python.min.js"></script>
+</body>
+</html>
