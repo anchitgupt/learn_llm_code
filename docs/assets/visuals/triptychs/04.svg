@@ -1,0 +1,67 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 400" width="100%" height="100%">
+    <defs>
+        <style>
+            @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&amp;display=swap');
+            text { font-family: 'IBM Plex Mono', monospace; font-size: 16px; fill: #ece8de; }
+            .title { font-size: 24px; font-weight: 600; fill: #5ef0c0; }
+            .panel-title { font-size: 18px; fill: #9aa1ad; letter-spacing: 2px; text-transform: uppercase; }
+            .label { font-size: 14px; fill: #9aa1ad; }
+            .code { fill: #f2b65e; font-size: 14px; }
+            .box { fill: #181c27; stroke: rgba(255,255,255,0.12); stroke-width: 2; rx: 8; }
+            .box-accent { fill: rgba(94, 240, 192, 0.1); stroke: #5ef0c0; stroke-width: 2; rx: 8; }
+            .arrow { stroke: #5d6470; stroke-width: 2; fill: none; }
+            .arrow-head { fill: #5d6470; }
+            .arrow-accent { stroke: #5ef0c0; stroke-width: 2; fill: none; }
+            .arrow-head-accent { fill: #5ef0c0; }
+            .node { fill: #13161f; stroke: rgba(255,255,255,0.12); stroke-width: 2; rx: 50; }
+            .node-active { fill: #2f8f74; stroke: #5ef0c0; stroke-width: 2; rx: 50; }
+        </style>
+        <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+            <path d="M 0 0 L 10 5 L 0 10 z" class="arrow-head"/>
+        </marker>
+        <marker id="arrow-accent" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+            <path d="M 0 0 L 10 5 L 0 10 z" class="arrow-head-accent"/>
+        </marker>
+    </defs>
+    <rect width="100%" height="100%" fill="#13161f" rx="12"/>
+    <g transform="translate(40, 40)">
+<text x="0" y="10" class="title">04. Embeddings &amp; Context (MLP LM)</text>
+    <!-- Panel -->
+    <rect x="0" y="40" width="340" height="280" class="box" />
+    <text x="20" y="70" class="panel-title">1. LOOKUP EMBEDDINGS</text>
+    <line x1="0" y1="90" x2="340" y2="90" stroke="rgba(255,255,255,0.12)" stroke-width="2"/>
+    
+    <text x="30" y="140" class="label">Context: ['l', 'u', 'c']</text>
+    <rect x="30" y="160" width="80" height="30" class="box-accent"/>
+    <rect x="120" y="160" width="80" height="30" class="box-accent"/>
+    <rect x="210" y="160" width="80" height="30" class="box-accent"/>
+    <text x="50" y="180" class="code">Vec(l)</text>
+    <text x="140" y="180" class="code">Vec(u)</text>
+    <text x="230" y="180" class="code">Vec(c)</text>
+    <text x="30" y="230" class="label">Each char mapped to dense vector</text>
+    
+    <!-- Panel -->
+    <rect x="390" y="40" width="340" height="280" class="box" />
+    <text x="410" y="70" class="panel-title">2. FLATTEN &amp; MLP</text>
+    <line x1="390" y1="90" x2="730" y2="90" stroke="rgba(255,255,255,0.12)" stroke-width="2"/>
+    
+    <text x="420" y="140" class="label">Concat</text>
+    <rect x="420" y="160" width="280" height="30" class="box"/>
+    <line x1="560" y1="190" x2="560" y2="220" class="arrow" marker-end="url(#arrow)"/>
+    <rect x="420" y="220" width="280" height="30" class="box-accent"/>
+    <text x="490" y="240" class="code">Hidden (Tanh)</text>
+    <line x1="560" y1="250" x2="560" y2="280" class="arrow" marker-end="url(#arrow)"/>
+    <rect x="420" y="280" width="280" height="30" class="box"/>
+    <text x="500" y="300" class="code">Logits</text>
+    
+    <!-- Panel -->
+    <rect x="780" y="40" width="340" height="280" class="box" />
+    <text x="800" y="70" class="panel-title">3. PREDICTION</text>
+    <line x1="780" y1="90" x2="1120" y2="90" stroke="rgba(255,255,255,0.12)" stroke-width="2"/>
+    
+    <text x="820" y="150" class="code">Context Window = 3</text>
+    <text x="820" y="190" class="label">Prediction sees 3 chars jointly</text>
+    <text x="820" y="230" class="label">Generates real-looking names:</text>
+    <text x="820" y="270" class="code" fill="#5ef0c0">"lucas", "isabella"</text>
+        </g>
+</svg>

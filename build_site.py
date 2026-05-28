@@ -736,6 +736,7 @@ def render_step_page(s, prev, nxt):
 <section class="section"><div class="wrap stepwrap">
   <div class="lead">{body}</div>
   {eq_theory_html(s)}
+  <img src="assets/visuals/triptychs/{s['n']}.svg" alt="Diagram for {s['n']}" style="width:100%; margin: 32px 0; border-radius: 8px; border: 1px solid var(--line); background: var(--panel);" />
   <div class="term">
     <div class="top"><span class="dot g"></span><span class="dot"></span><span class="dot"></span>
       <span>{esc(s['file'])}</span><span class="out-lab">output</span></div>
