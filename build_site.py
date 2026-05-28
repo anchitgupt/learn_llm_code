@@ -263,6 +263,131 @@ memory: fp16 16 bits -> 3-bit = 5.3x smaller"""),
 ]
 
 
+# Deeper theory per rung: an optional key formula + a few explanatory paragraphs.
+# Keyed by step number; rendered after the intro paragraphs of each step.
+THEORY = {
+    "00": dict(
+        eq="a = &sigma;(W&middot;x + b)&emsp;&middot;&emsp;&sigma;&prime;(z) = &sigma;(z)(1 &minus; &sigma;(z))&emsp;&middot;&emsp;w &larr; w &minus; &eta;&nbsp;&part;L/&part;w",
+        cap="a neuron: weighted sum &rarr; nonlinearity; trained by gradient descent on the loss.",
+        paras=[
+            "A neuron computes a weighted sum of its inputs and passes it through a nonlinear <em>activation</em>. Stacking a hidden layer of these between input and output makes the network a <strong>universal function approximator</strong> &mdash; with enough hidden units it can represent any continuous function. The nonlinearity is essential: without it, stacked linear layers collapse into a single linear map.",
+            "Learning means minimizing a <strong>loss</strong> (here, mean-squared error) by gradient descent. <strong>Backpropagation</strong> is just the chain rule applied in reverse: compute how the loss depends on each weight, layer by layer from output back to input, then nudge every weight a small step <em>against</em> its gradient. XOR is the canonical test because it is <em>not linearly separable</em> &mdash; a single layer cannot solve it, but a hidden layer learns the intermediate features that can.",
+        ]),
+    "01": dict(
+        eq="P(next | cur) = count(cur, next) / &Sigma; count(cur, &middot;)",
+        cap="the maximum-likelihood bigram: probabilities are just normalized counts.",
+        paras=[
+            "Language modeling is the task of estimating P(next token | previous tokens). A <strong>bigram</strong> model makes the <em>Markov assumption</em> that the next token depends only on the current one. Under that assumption the maximum-likelihood estimate has a closed form: count each pair and normalize each row to a probability distribution.",
+            "<strong>Smoothing</strong> (adding 1 to every count, a.k.a. Laplace smoothing) prevents any transition from having probability zero &mdash; otherwise an unseen pair would make the whole sequence impossible and the log-loss infinite. Generation is then just repeated sampling from each conditional distribution. The fatal limit: a context of one token has no memory of the wider word, which is exactly what later steps fix.",
+        ]),
+    "02": dict(
+        eq="softmax(z)&#7522; = exp(z&#7522;) / &Sigma;&#11388; exp(z&#11388;)&emsp;&middot;&emsp;L = &minus;log p(target)&emsp;&middot;&emsp;&part;L/&part;z = p &minus; y",
+        cap="cross-entropy = negative log-likelihood; its gradient through softmax is simply p &minus; y.",
+        paras=[
+            "Here the bigram is <em>learned</em> instead of counted. The model maps a one-hot input through a weight matrix to <strong>logits</strong>, which <strong>softmax</strong> turns into a probability distribution. Training minimizes <strong>cross-entropy</strong> &mdash; the negative log-probability assigned to the true next token. Minimizing cross-entropy is identical to maximizing likelihood, the very objective the counting model solves in closed form &mdash; which is why the two converge to the same answer.",
+            "The gradient of softmax-plus-cross-entropy is famously clean: <code>predicted &minus; actual</code>. Each row of the weight matrix is effectively learning the log-probabilities of the next token (a per-row logistic regression). The point isn't that gradient descent beats counting here &mdash; it ties it &mdash; but that gradient descent is the <em>general</em> tool that keeps working once the model is too complex to count.",
+        ]),
+    "03": dict(
+        eq="merge* = argmax over adjacent pairs of  count(a, b)&emsp;&rarr;&emsp;new token",
+        cap="BPE greedily merges the most frequent adjacent pair, over and over.",
+        paras=[
+            "A tokenizer is a reversible map between text and integer IDs, and its design is a trade-off between <strong>vocabulary size</strong> and <strong>sequence length</strong>. Character-level: tiny vocabulary, very long sequences, but never an unknown token. Word-level: short sequences, but a huge vocabulary and an out-of-vocabulary problem for any new word.",
+            "<strong>Byte-Pair Encoding</strong> finds the sweet spot. Starting from raw bytes/characters, it repeatedly merges the most frequent adjacent pair into a new subword token. Frequent chunks like <code>the</code> or <code>ing</code> become single tokens while rare words still decompose into pieces &mdash; an information-theoretic win, giving common patterns short codes. Modern LLMs use byte-level BPE for exactly this robustness, which is why fewer tokens per word means more text fits in the context window.",
+        ]),
+    "04": dict(
+        eq="e = C[context]&emsp;&middot;&emsp;h = tanh(W&#8321;&middot;flatten(e) + b&#8321;)&emsp;&middot;&emsp;logits = W&#8322;&middot;h",
+        cap="Bengio's neural LM: look up embeddings for a window, then an MLP predicts the next token.",
+        paras=[
+            "This is the 2003 Bengio neural language model, and it introduces the idea that powers everything after it: the <strong>embedding</strong>. Each token is mapped to a dense, learned vector instead of a one-hot. Because similar tokens can learn similar vectors, the model shares statistical strength across contexts &mdash; directly fighting the <em>curse of dimensionality</em> that makes count-based n-grams blow up as the context grows.",
+            "The second idea is a fixed <strong>context window</strong>: concatenate the embeddings of the previous <em>n</em> tokens and feed them through an MLP (the same tanh network as #00) to predict the next one. Now the prediction depends on several tokens jointly, so generated names look real. The remaining limitation &mdash; a <em>fixed</em>, small window &mdash; is what attention later removes.",
+        ]),
+    "05": dict(
+        eq="reverse-mode autodiff:&emsp;&part;L/&part;u = &Sigma; (&part;L/&part;v)&middot;(&part;v/&part;u)&emsp;over children v of u",
+        cap="every value remembers its parents and a local derivative; .backward() applies the chain rule in reverse.",
+        paras=[
+            "Hand-deriving gradients doesn't scale, so frameworks use <strong>reverse-mode automatic differentiation</strong>. As the forward pass runs, it records a <em>computational graph</em>: every intermediate value remembers which values produced it and a local rule for its derivative. This is not numerical approximation nor symbolic algebra &mdash; it's exact, computed by composing local derivatives.",
+            "The backward pass walks that graph from the output back to the inputs in topological order, multiplying and accumulating local derivatives (the chain rule) to get <code>&part;loss/&part;parameter</code> for every parameter at once. Remarkably, the whole backward pass costs about the same as one forward pass &mdash; which is what makes training networks with billions of parameters feasible.",
+        ]),
+    "06": dict(
+        eq="loss.backward()&emsp;&equiv;&emsp;the autograd graph of #05, on tensors&emsp;&middot;&emsp;optimizer.step()",
+        cap="PyTorch = tensors + autograd + modules + optimizers, GPU-accelerated.",
+        paras=[
+            "PyTorch packages the ideas so far into reusable machinery: <strong>tensors</strong> (n-dimensional arrays that track gradients), <strong>nn.Module</strong> (parameter bookkeeping), <strong>optimizers</strong>, and GPU acceleration. A single <code>loss.backward()</code> runs the same reverse-mode autodiff you built in #05, but over whole tensors; <code>optimizer.step()</code> applies the update rule to every parameter.",
+            "The optimizer matters: plain SGD uses one global learning rate, while <strong>Adam/AdamW</strong> keep per-parameter running estimates of the gradient's mean and variance to adapt each step size &mdash; far more robust for deep networks. This abstraction is exactly what frees the next steps to build something as intricate as a transformer without ever writing a gradient by hand.",
+        ]),
+    "07": dict(
+        eq="Attention(Q, K, V) = softmax( QK&#7488; / &radic;d&#8342; + mask )&middot;V",
+        cap="content-based weighted average; scaling by &radic;d&#8342; keeps the softmax gradients stable.",
+        paras=[
+            "Attention is a <strong>content-based weighted average</strong>. Each token produces a <em>query</em> (what it's looking for), a <em>key</em> (what it offers), and a <em>value</em> (what it passes on). The dot product of a query with every key gives relevance scores; softmax turns those into weights that sum to one; the output is the weighted sum of values. Scaling scores by &radic;d&#8342; keeps them from growing with dimension, which would otherwise saturate the softmax and kill its gradient.",
+            "Two properties make it powerful. It has a <strong>global receptive field</strong> &mdash; any token can attend to any earlier token in a single step, unlike the fixed window of an MLP or the slow recurrence of an RNN. And it is <em>permutation-equivariant</em> (it sees a set, not a sequence), which is precisely why transformers must add positional information separately. The <strong>causal mask</strong> sets future scores to &minus;&infin; so a token can never attend to what it's trying to predict.",
+        ]),
+    "08": dict(
+        eq="x = x + MHA(LN(x))&emsp;&middot;&emsp;x = x + FFN(LN(x))&emsp;(pre-norm residual)",
+        cap="attention mixes across tokens; the FFN mixes across features; residuals + norm keep deep stacks trainable.",
+        paras=[
+            "A transformer block combines four ideas. <strong>Multi-head attention</strong> runs several attention operations in parallel low-dimensional subspaces, letting different heads specialize (one tracks the previous letter, another the start of the word), then concatenates them. The position-wise <strong>feed-forward network</strong> (two linear layers around a nonlinearity, ~4&times; wider) gives each token nonlinear processing on its own.",
+            "The other two ideas make depth <em>trainable</em>. <strong>Residual connections</strong> (<code>x = x + sublayer(x)</code>) create identity shortcuts so gradients flow through dozens of layers without vanishing, and each block only has to learn a small correction. <strong>LayerNorm</strong> normalizes each token's vector to a stable scale; applying it <em>before</em> each sublayer (pre-norm) trains more stably than after. The slogan: attention mixes information <em>across</em> tokens, the FFN processes <em>each</em> token &mdash; gather, then think, repeated N times.",
+        ]),
+    "09": dict(
+        eq="h = blocks( E_tok[x] + E_pos )&emsp;&middot;&emsp;logits = h&middot;W&#7488;&emsp;&middot;&emsp;L = &minus;&Sigma; log p(next | context)",
+        cap="decoder-only GPT: token + position embeddings, N causal blocks, next-token cross-entropy.",
+        paras=[
+            "A GPT is a <strong>decoder-only transformer</strong>. Tokens become embeddings; because attention is order-blind, a learned <strong>positional embedding</strong> is added so the model knows <em>where</em> each token sits. The sum flows through N stacked causal blocks, a final norm, and a linear head that produces a probability distribution over the vocabulary for every position.",
+            "Training uses <strong>next-token cross-entropy</strong> with <em>teacher forcing</em>: thanks to the causal mask, the model predicts the next token at <em>every</em> position simultaneously in one forward pass, and the loss averages over all of them &mdash; extremely efficient. Generation reverses this: sample a token, append it, repeat (autoregression). This is the entire GPT recipe; <em>scaling laws</em> say the loss falls predictably as you add parameters, data, and compute &mdash; the only real difference between this and GPT-4.",
+        ]),
+    "10": dict(
+        eq="p &prop; exp(logits / T)&emsp;&middot;&emsp;top-k: keep k highest&emsp;&middot;&emsp;top-p: smallest set with &Sigma;p &ge; p",
+        cap="decoding shapes the model's own distribution; the weights never change.",
+        paras=[
+            "Once trained, the model gives a distribution over the next token; <strong>decoding</strong> decides how to pick from it. Greedy (argmax) maximizes each local step but produces repetitive, globally sub-optimal text, and beam search &mdash; great for translation &mdash; degenerates for open-ended generation. So we sample, but shape the distribution first.",
+            "<strong>Temperature</strong> T divides the logits before softmax: T&nbsp;&lt;&nbsp;1 sharpens toward the top choices (safer, more repetitive), T&nbsp;&gt;&nbsp;1 flattens them (wilder, more diverse), and T&rarr;0 recovers greedy. <strong>Truncation</strong> then trims the unreliable tail &mdash; <em>top-k</em> keeps the k most likely tokens, <em>top-p</em> (nucleus) keeps the smallest set whose probability mass exceeds p, adapting how many options it considers to how confident the model is. None of this touches the weights; it's purely how you read the same model.",
+        ]),
+    "11": dict(
+        eq="lr(t): warmup &rarr; cosine decay&emsp;&middot;&emsp;clip &Vert;g&Vert; &le; c&emsp;&middot;&emsp;AdamW: decoupled weight decay",
+        cap="the engineering that lets a run survive hours, crashes, and bad batches.",
+        paras=[
+            "Real training needs more than a loop. A <strong>learning-rate schedule</strong> &mdash; a linear <em>warmup</em> followed by <em>cosine decay</em> &mdash; starts small to avoid instability when early gradients are large and poorly conditioned, then anneals to refine the solution. <strong>Gradient clipping</strong> caps the gradient norm so a single pathological batch can't blow the weights to infinity.",
+            "<strong>Checkpointing</strong> the model, optimizer state, and step count makes a run <em>resumable</em> &mdash; essential for multi-day training and crash recovery &mdash; while tracking the best validation loss guards against overfitting. <strong>AdamW</strong> decouples weight decay from the gradient update, a small change that consistently improves generalization. These are the unglamorous details that separate a toy loop from a real training run.",
+        ]),
+    "12": dict(
+        eq="maximize  P(response | instruction)&emsp;&middot;&emsp;loss on response tokens only (mask the prompt)",
+        cap="supervised fine-tuning turns a text-continuer into an instruction-follower.",
+        paras=[
+            "A pretrained <strong>base model</strong> models P(text) &mdash; it <em>continues</em> whatever you give it, it doesn't obey. <strong>Supervised fine-tuning (SFT)</strong> keeps training that same model on curated (instruction, response) pairs wrapped in a fixed template, teaching the conditional distribution P(response | instruction). It's still ordinary next-token cross-entropy &mdash; only the data has changed.",
+            "The crucial trick is <strong>loss masking</strong>: gradients are computed only on the <em>response</em> tokens (the prompt's labels are ignored), so the model learns to <em>answer</em> a question rather than to generate more questions. This single step &mdash; one nudge on top of a base model &mdash; is what turned GPT-3 into InstructGPT and, ultimately, ChatGPT.",
+        ]),
+    "13": dict(
+        eq="L = &minus;log &sigma;( &beta;[ (log &pi;_&theta;(y_w) &minus; log &pi;_ref(y_w)) &minus; (log &pi;_&theta;(y_l) &minus; log &pi;_ref(y_l)) ] )",
+        cap="DPO: one classification loss over (chosen y_w, rejected y_l) pairs &mdash; no reward model, no RL.",
+        paras=[
+            "Classic <strong>RLHF</strong> aligns a model in three stages: collect human preferences, train a separate <em>reward model</em>, then optimize the policy against it with reinforcement learning (PPO) under a KL penalty. It works but is heavy and unstable &mdash; three models and an RL loop.",
+            "<strong>DPO</strong>'s insight is that the RLHF objective has a closed-form optimum linking the reward to the log-ratio between the policy and a frozen <em>reference</em> model. That lets you skip the reward model and the RL entirely and optimize preferences <em>directly</em> with a simple binary-classification loss on (chosen, rejected) pairs. The coefficient &beta; controls how far the policy may drift from the reference (an implicit KL constraint). Same alignment effect, far simpler and more stable &mdash; today's stacks chain SFT &rarr; DPO &rarr; GRPO/RLVR for reasoning.",
+        ]),
+    "14": dict(
+        eq="RoPE: rotate(q,k) by m&theta;&emsp;&middot;&emsp;RMSNorm(x)=x&middot;g/&radic;(mean&nbsp;x&sup2;+&epsilon;)&emsp;&middot;&emsp;SwiGLU=(SiLU(xW&#8321;)&odot;xW&#8323;)W&#8322;",
+        cap="the four upgrades behind Llama / Mistral / Qwen / DeepSeek.",
+        paras=[
+            "Four refinements separate a 2017 transformer from a 2026 one. <strong>RoPE</strong> encodes position by <em>rotating</em> the query and key vectors by an angle proportional to their position; because a rotation's dot product depends only on the <em>relative</em> offset, the model generalizes to longer contexts and needs no learned position table. <strong>RMSNorm</strong> drops LayerNorm's mean-subtraction and bias, normalizing by the root-mean-square alone &mdash; cheaper, equally stable.",
+            "<strong>SwiGLU</strong> replaces the ReLU feed-forward with a <em>gated</em> unit: one branch decides &lsquo;how much&rsquo; and multiplies the other, giving more expressive power per parameter. <strong>GQA</strong> (grouped-query attention) lets several query heads share one set of key/value heads, interpolating between full multi-head (best quality) and multi-query (smallest cache). Together they reach a lower loss with <em>fewer</em> parameters &mdash; which is exactly why the whole field adopted them.",
+        ]),
+    "15": dict(
+        eq="memory = 2 &middot; L &middot; n_kv &middot; d_head &middot; T&emsp;&middot;&emsp;work:  na&iuml;ve &asymp; T&sup2;/2  &rarr;  cached = T",
+        cap="past keys/values never change, so cache them instead of recomputing.",
+        paras=[
+            "During autoregressive decoding, the keys and values of all previous tokens are <em>fixed</em> once computed &mdash; yet the naive loop recomputes them at every step, costing O(T&sup2;) for a T-token generation. The <strong>KV cache</strong> stores each layer's past K and V and simply appends the new token's K/V each step, so a step is O(1) projection plus attention over the cache &mdash; making the whole generation O(T).",
+            "The cache grows linearly with context length and, at long contexts, becomes the dominant consumer of inference memory (often larger than the weights). This is where #14's <strong>GQA</strong> pays off concretely: fewer key/value heads means a proportionally smaller cache. The output is bit-for-bit identical to the naive loop &mdash; it's the same mathematics, just not recomputed.",
+        ]),
+    "16": dict(
+        eq="rotate by orthogonal Q  (&langle;Qa, Qb&rangle; = &langle;a, b&rangle;)  &rarr;  quantize  &rarr;  unrotate",
+        cap="a rotation preserves dot products while spreading outliers, so low bits suffice.",
+        paras=[
+            "Since cache memory is proportional to bits-per-value, low-bit <strong>quantization</strong> shrinks it directly. But per-tensor low-bit quantization fails on heavy-tailed data: a few <em>outlier coordinates</em> stretch the min&ndash;max range, forcing every ordinary value onto a coarse grid. Real transformer K/V are full of such outlier channels.",
+            "<strong>TurboQuant</strong>'s trick is to rotate each vector by a random orthogonal (or Hadamard) matrix <em>before</em> quantizing. A rotation preserves lengths and &mdash; crucially &mdash; inner products, so attention scores are unchanged if queries are rotated the same way; meanwhile, by concentration of measure, it spreads the outliers' energy across all coordinates, eliminating them so low bits quantize cleanly. PolarQuant plus a residual-correction stage reaches ~3 bits, ~6&times; smaller and ~8&times; faster. The honest caveat (shown in the output): a Gaussian is rotation-invariant, so the trick only helps when outliers actually exist &mdash; which, in real models, they do.",
+        ]),
+}
+
+
 CSS = r"""
 :root{
   --bg:#0a0c10; --bg2:#0d1016; --panel:#13161f; --panel2:#181c27;
@@ -362,6 +487,21 @@ h2.sec{font-family:var(--mono);font-weight:600;font-size:clamp(28px,4vw,40px);ma
 .step .body p{margin:0 0 14px}
 code{font-family:var(--mono);font-size:.86em;background:rgba(94,240,192,.10);color:var(--accent);
   padding:2px 6px;border-radius:3px}
+
+/* key formula */
+.eq{font-family:var(--mono);font-size:14px;line-height:1.7;background:rgba(94,240,192,.05);
+  border-left:2px solid var(--accent);padding:13px 18px;margin:18px 0 0;border-radius:0 4px 4px 0;
+  color:#d4efe6;overflow-x:auto;white-space:nowrap}
+.eq .cap{display:block;font-size:12px;color:var(--muted);margin-top:7px;white-space:normal}
+
+/* theory block */
+.theory{margin-top:18px;padding:18px 20px;background:var(--panel);border:1px solid var(--line);
+  border-radius:6px;max-width:760px}
+.theory .lab{font-family:var(--mono);font-size:11px;letter-spacing:.26em;text-transform:uppercase;
+  color:var(--amber);margin:0 0 12px;display:flex;align-items:center;gap:9px}
+.theory .lab::before{content:"";width:18px;height:1px;background:var(--amber);display:inline-block}
+.theory p{margin:0 0 13px;color:#c6cbd4;font-size:16.5px}
+.theory p:last-child{margin-bottom:0}
 
 /* terminal output */
 .term{background:#070809;border:1px solid var(--line2);border-radius:6px;margin:18px 0 0;overflow:hidden}
@@ -491,6 +631,16 @@ def render_step(s):
     src = esc(read_source(s["file"]))
     out = esc(s["out"])
     body = "\n".join(f"<p>{p}</p>" for p in s["body"])
+
+    t = THEORY.get(s["n"])
+    eq_html = theory_html = ""
+    if t and t.get("eq"):
+        eq_html = (f'<div class="eq">{t["eq"]}'
+                   f'<span class="cap">{t.get("cap", "")}</span></div>')
+    if t and t.get("paras"):
+        paras = "".join(f"<p>{p}</p>" for p in t["paras"])
+        theory_html = f'<div class="theory"><div class="lab">The theory</div>{paras}</div>'
+
     return f"""
 <article class="step" id="s{s['n']}">
   <div class="head">
@@ -503,6 +653,8 @@ def render_step(s):
   </div>
   <div class="body">
     {body}
+    {eq_html}
+    {theory_html}
     <div class="term">
       <div class="top"><span class="dot g"></span><span class="dot"></span><span class="dot"></span>
         <span>{esc(s['file'])}</span><span class="out-lab">output</span></div>
