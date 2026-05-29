@@ -868,6 +868,37 @@ footer b{color:var(--ink)}
 .pager a:hover .pt{color:var(--accent)}
 .pager .next{text-align:right}
 @media(max-width:600px){.pager{grid-template-columns:1fr}}
+
+/* animations */
+.anim{margin:22px 0 0;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:24px 22px}
+.anim .alab{font-family:var(--mono);font-size:11px;letter-spacing:.24em;text-transform:uppercase;
+  color:var(--accent);margin:0 0 20px;display:flex;align-items:center;gap:9px}
+.anim .alab::before{content:"";width:18px;height:1px;background:var(--accent);display:inline-block}
+.anim .acap{font-family:var(--mono);font-size:12.5px;color:var(--muted);margin:18px auto 0;
+  text-align:center;max-width:640px;line-height:1.65}
+.anim video{display:block;max-width:100%;border-radius:6px;margin:0 auto;background:#000}
+/* #07 causal-attention grid */
+.attn-grid{display:grid;grid-template-columns:repeat(5,32px);gap:7px;justify-content:center}
+.attn-grid .c{width:32px;height:32px;border-radius:5px;background:#0f1218;border:1px solid var(--line)}
+.attn-grid .c.on{animation:attnpulse 3.6s ease-in-out infinite}
+@keyframes attnpulse{0%,72%,100%{background:#0f1218;box-shadow:none}
+  36%{background:var(--accent);box-shadow:0 0 12px rgba(94,240,192,.45)}}
+/* #10 temperature bars */
+.tbars{display:flex;align-items:flex-end;justify-content:center;gap:12px;height:112px}
+.tbars .b{width:34px;height:var(--h1);border-radius:3px 3px 0 0;
+  background:linear-gradient(180deg,var(--accent),var(--accent-dim));animation:temp 5s ease-in-out infinite}
+@keyframes temp{0%,100%{height:var(--h1)}50%{height:var(--h2)}}
+/* #15 kv-cache append */
+.kv{display:flex;gap:8px;justify-content:center;min-height:44px;align-items:center}
+.kv .k{width:34px;height:38px;border-radius:5px;border:1px solid var(--accent-dim);
+  background:rgba(94,240,192,.08);display:flex;align-items:center;justify-content:center;
+  font-family:var(--mono);font-size:12px;color:var(--accent);opacity:0;animation:kvin 6s ease-in-out infinite}
+@keyframes kvin{0%{opacity:0;transform:scale(.5)}8%{opacity:1;transform:scale(1)}90%{opacity:1}100%{opacity:0}}
+/* #03 bpe merge */
+.bpe{position:relative;height:40px;font-family:var(--mono);font-size:22px;text-align:center;color:var(--ink)}
+.bpe span{position:absolute;left:0;right:0;top:0;opacity:0;animation:bpe 6s ease-in-out infinite}
+@keyframes bpe{0%{opacity:0}4%{opacity:1}28%{opacity:1}33%{opacity:0}100%{opacity:0}}
+@media(prefers-reduced-motion:reduce){.anim *{animation:none!important}}
 """
 
 
@@ -1023,6 +1054,75 @@ def render_notebook(s):
     return "\n".join(out)
 
 
+def _anim_attention():
+    cells = []
+    for r in range(5):
+        for c in range(5):
+            if c <= r:
+                cells.append(f'<div class="c on" style="animation-delay:{r*0.18 + c*0.12:.2f}s"></div>')
+            else:
+                cells.append('<div class="c"></div>')
+    return (f'<div class="attn-grid">{"".join(cells)}</div>'
+            '<div class="acap">Causal attention: each row (a query token) lights up the tokens it '
+            'may attend to &mdash; itself and every earlier token. The upper triangle stays dark: '
+            'the future is masked.</div>')
+
+
+def _anim_temperature():
+    peak = [16, 32, 96, 46, 24, 15]
+    flat = [50, 54, 58, 54, 50, 48]
+    bars = "".join(f'<div class="b" style="--h1:{p}px;--h2:{f}px"></div>'
+                   for p, f in zip(peak, flat))
+    return (f'<div class="tbars">{bars}</div>'
+            '<div class="acap">Temperature reshapes the same distribution without touching the '
+            'weights: low T is peaked (confident, repetitive), high T is flat (diverse, riskier).</div>')
+
+
+def _anim_kvcache():
+    ks = "".join(f'<div class="k" style="animation-delay:{i*0.8:.1f}s">k{i}</div>' for i in range(6))
+    return (f'<div class="kv">{ks}</div>'
+            '<div class="acap">The KV cache grows by one entry per generated token &mdash; past '
+            'keys/values are kept, never recomputed. That turns O(T&sup2;) decoding into O(T).</div>')
+
+
+def _anim_bpe():
+    stages = ["t &middot; h &middot; e &middot; t &middot; h &middot; e",
+              "th &middot; e &middot; th &middot; e",
+              "the &middot; the"]
+    spans = "".join(f'<span style="animation-delay:{i*2}s">{t}</span>'
+                    for i, t in enumerate(stages))
+    return (f'<div class="bpe">{spans}</div>'
+            '<div class="acap">Byte-Pair Encoding merges the most frequent adjacent pair, again and '
+            'again: t,h &rarr; th &rarr; the. Fewer tokens carry the same text.</div>')
+
+
+ANIM = {
+    "03": _anim_bpe(),
+    "07": _anim_attention(),
+    "10": _anim_temperature(),
+    "15": _anim_kvcache(),
+}
+ANIM_CAP = {
+    "14": "RoPE encodes position by rotating each query/key vector by an angle proportional to its "
+          "position. A rotation preserves the dot product, so attention scores depend only on the "
+          "relative offset between tokens.",
+}
+
+
+def render_anim(s):
+    """A motion block for a step: a rendered Manim <video> if present, else a
+    lightweight CSS animation, else nothing."""
+    vid = DOCS / "assets" / "anim" / f"{s['n']}.mp4"
+    if vid.exists():
+        inner = (f'<video src="assets/anim/{s["n"]}.mp4" autoplay loop muted playsinline></video>'
+                 f'<div class="acap">{ANIM_CAP.get(s["n"], "")}</div>')
+    elif s["n"] in ANIM:
+        inner = ANIM[s["n"]]
+    else:
+        return ""
+    return f'<div class="anim"><div class="alab">Animation</div>{inner}</div>'
+
+
 def render_step_page(s, prev, nxt):
     """A full standalone HTML page for one script."""
     src = esc(read_source(s["file"]))
@@ -1073,6 +1173,7 @@ def render_step_page(s, prev, nxt):
 <section class="section"><div class="wrap stepwrap">
   <div class="lead">{body}</div>
   {eq_theory_html(s)}
+  {render_anim(s)}
   {visual_gallery_html(s)}
   <div class="srch">The notebook &middot; <span>{nb_name}</span> &mdash; code cells &amp; their output. <a href="{nb_url}">Open &amp; run on GitHub &rarr;</a></div>
   {nb_html}
