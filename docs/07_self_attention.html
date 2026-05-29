@@ -32,48 +32,8 @@
 <p>The <strong>causal mask</strong> (the lower triangle below) forbids peeking at the future. Unlike the MLP's fixed window, attention scales to any context and <em>learns</em> what to focus on.</p></div>
   <div class="eq">Attention(Q, K, V) = softmax( QK&#7488; / &radic;d&#8342; + mask )&middot;V<span class="cap">content-based weighted average; scaling by &radic;d&#8342; keeps the softmax gradients stable.</span></div><div class="theory"><div class="lab">The theory</div><p>Attention is a <strong>content-based weighted average</strong>. Each token produces a <em>query</em> (what it's looking for), a <em>key</em> (what it offers), and a <em>value</em> (what it passes on). The dot product of a query with every key gives relevance scores; softmax turns those into weights that sum to one; the output is the weighted sum of values. Scaling scores by &radic;d&#8342; keeps them from growing with dimension, which would otherwise saturate the softmax and kill its gradient.</p><p>Two properties make it powerful. It has a <strong>global receptive field</strong> &mdash; any token can attend to any earlier token in a single step, unlike the fixed window of an MLP or the slow recurrence of an RNN. And it is <em>permutation-equivariant</em> (it sees a set, not a sequence), which is precisely why transformers must add positional information separately. The <strong>causal mask</strong> sets future scores to &minus;&infin; so a token can never attend to what it's trying to predict.</p></div>
   <section class="visuals" aria-label="Visual walkthrough"><div class="visual-kicker">Visual walkthrough</div><div class="visual-grid"><figure class="visual-card"><img src="assets/visuals/07-1-qkv-streams.webp" alt="Token columns emitting query, key, and value streams." loading="lazy" decoding="async"><figcaption><strong>Q, K, V streams</strong>Each token emits what it seeks, what it offers, and what it will pass on.</figcaption></figure><figure class="visual-card"><img src="assets/visuals/07-2-causal-mask.webp" alt="Lower-triangular attention matrix with future positions blocked." loading="lazy" decoding="async"><figcaption><strong>Causal mask</strong>The lower triangle lets each token attend only to itself and the past.</figcaption></figure><figure class="visual-card"><img src="assets/visuals/07-3-weighted-values.webp" alt="Weighted value vectors merging into updated token representations." loading="lazy" decoding="async"><figcaption><strong>Weighted values</strong>Attention weights mix value vectors into context-aware token representations.</figcaption></figure></div></section>
-  <div class="term">
-    <div class="top"><span class="dot g"></span><span class="dot"></span><span class="dot"></span>
-      <span>07_self_attention.py</span><span class="out-lab">output</span></div>
-    <pre>Attention weights (row i attends over tokens 0..i):
-        tok0  tok1  tok2  tok3  tok4
-  tok0  1.00  0.00  0.00  0.00  0.00
-  tok1  0.48  0.52  0.00  0.00  0.00
-  tok4  0.12  0.20  0.20  0.20  0.29</pre>
-  </div>
-  <div class="srch">Full source &middot; <span>07_self_attention.py</span></div>
-  <div class="term">
-    <div class="top"><span class="dot g"></span><span class="dot"></span><span class="dot"></span>
-      <span>07_self_attention.py</span><span class="out-lab">source</span></div>
-    <pre><code class="language-python">"""
-#7 in the "NN to tiny LLM" ladder.  (the crucial mechanism)
-
-ATTENTION is the idea that makes transformers — and therefore modern LLMs —
-work. The MLP (#4/#6) crammed a fixed window of characters into one vector and
-treated every position the same. Attention instead lets every token look back
-over ALL previous tokens and decide, for itself, which ones are relevant right
-now.
-
-The mechanism, per token:
-  - Query (Q): "what am I looking for?"
-  - Key   (K): "what do I offer?"
-  - Value (V): "what information do I pass on if attended to?"
-
-A token compares its Query against every other token's Key (a dot product) to
-get attention SCORES, softmaxes them into WEIGHTS, then takes a weighted sum of
-the Values. That weighted sum is the token's new, context-aware representation.
-
-CAUSAL MASKING: in a language model a token may only attend to itself and
-EARLIER tokens (it must not peek at the future it's trying to predict). We
-enforce this by setting future scores to -infinity before the softmax.
-
-This file implements one attention head from scratch in PyTorch and prints the
-attention weights so you can SEE which tokens attend to which.
-
-Run with:  python 07_self_attention.py
-"""
-
-import torch
+  <div class="srch">The notebook &middot; <span>07_self_attention.ipynb</span> &mdash; code cells &amp; their output. <a href="https://github.com/anchitgupt/learn_llm_code/blob/main/07_self_attention.ipynb">Open &amp; run on GitHub &rarr;</a></div>
+  <div class="term"><div class="top"><span class="dot g"></span><span class="dot"></span><span class="dot"></span><span class="out-lab">In [1]</span></div><pre><code class="language-python">import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
@@ -111,35 +71,47 @@ class SelfAttentionHead(nn.Module):
 
         if return_weights:
             return out, weights
-        return out
+        return out</code></pre></div>
+<div class="term"><div class="top"><span class="dot g"></span><span class="dot"></span><span class="dot"></span><span class="out-lab">In [2]</span></div><pre><code class="language-python"># A toy sequence of 5 tokens, each a 4-dim embedding, single batch.
+B, T, C = 1, 5, 4
+x = torch.randn(B, T, C)
 
+head = SelfAttentionHead(n_embd=C, head_size=4)
+out, weights = head(x, return_weights=True)
 
-if __name__ == "__main__":
-    # A toy sequence of 5 tokens, each a 4-dim embedding, single batch.
-    B, T, C = 1, 5, 4
-    x = torch.randn(B, T, C)
+print(f"input  shape: {tuple(x.shape)}  (batch, tokens, embd)")
+print(f"output shape: {tuple(out.shape)}  (each token now context-aware)\n")
 
-    head = SelfAttentionHead(n_embd=C, head_size=4)
-    out, weights = head(x, return_weights=True)
+print("Attention weights — row i = how token i distributes attention over")
+print("tokens 0..4. Note the lower-triangular shape: no token sees the")
+print("future, and each row sums to 1.\n")
+w = weights[0]
+header = "        " + "".join(f"tok{j}  " for j in range(T))
+print(header)
+for i in range(T):
+    row = "  ".join(f"{w[i, j]:.2f}" for j in range(T))
+    print(f"  tok{i}  {row}")
 
-    print(f"input  shape: {tuple(x.shape)}  (batch, tokens, embd)")
-    print(f"output shape: {tuple(out.shape)}  (each token now context-aware)\n")
+print("\nRead it: token 0 can only attend to itself (1.00). Token 4 spreads")
+print("attention across all 5 tokens. The upper triangle is exactly 0 —")
+print("that's the causal mask doing its job.")</code></pre></div>
+<div class="term"><div class="top"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="out-lab">Output</span></div><pre>input  shape: (1, 5, 4)  (batch, tokens, embd)
+output shape: (1, 5, 4)  (each token now context-aware)
 
-    print("Attention weights — row i = how token i distributes attention over")
-    print("tokens 0..4. Note the lower-triangular shape: no token sees the")
-    print("future, and each row sums to 1.\n")
-    w = weights[0]
-    header = "        " + "".join(f"tok{j}  " for j in range(T))
-    print(header)
-    for i in range(T):
-        row = "  ".join(f"{w[i, j]:.2f}" for j in range(T))
-        print(f"  tok{i}  {row}")
+Attention weights — row i = how token i distributes attention over
+tokens 0..4. Note the lower-triangular shape: no token sees the
+future, and each row sums to 1.
 
-    print("\nRead it: token 0 can only attend to itself (1.00). Token 4 spreads")
-    print("attention across all 5 tokens. The upper triangle is exactly 0 —")
-    print("that's the causal mask doing its job.")
-</code></pre>
-  </div>
+        tok0  tok1  tok2  tok3  tok4  
+  tok0  1.00  0.00  0.00  0.00  0.00
+  tok1  0.48  0.52  0.00  0.00  0.00
+  tok2  0.28  0.35  0.37  0.00  0.00
+  tok3  0.20  0.27  0.30  0.24  0.00
+  tok4  0.12  0.20  0.20  0.20  0.29
+
+Read it: token 0 can only attend to itself (1.00). Token 4 spreads
+attention across all 5 tokens. The upper triangle is exactly 0 —
+that's the causal mask doing its job.</pre></div>
   <div class="pager"><a class="prev" href="06_switch_to_pytorch.html"><div class="dir">&larr; Previous</div><div class="pt">06 &middot; Switching to PyTorch</div></a><a class="next" href="08_transformer_block.html"><div class="dir">Next &rarr;</div><div class="pt">08 &middot; The transformer block</div></a></div>
 </div></section>
 

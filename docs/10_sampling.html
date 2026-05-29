@@ -32,46 +32,8 @@
 <p>This is exactly the <code>temperature</code> / <code>top_p</code> knob you set when calling an LLM API. The model is frozen &mdash; you're reshaping how it samples from itself.</p></div>
   <div class="eq">p &prop; exp(logits / T)&emsp;&middot;&emsp;top-k: keep k highest&emsp;&middot;&emsp;top-p: smallest set with &Sigma;p &ge; p<span class="cap">decoding shapes the model's own distribution; the weights never change.</span></div><div class="theory"><div class="lab">The theory</div><p>Once trained, the model gives a distribution over the next token; <strong>decoding</strong> decides how to pick from it. Greedy (argmax) maximizes each local step but produces repetitive, globally sub-optimal text, and beam search &mdash; great for translation &mdash; degenerates for open-ended generation. So we sample, but shape the distribution first.</p><p><strong>Temperature</strong> T divides the logits before softmax: T&nbsp;&lt;&nbsp;1 sharpens toward the top choices (safer, more repetitive), T&nbsp;&gt;&nbsp;1 flattens them (wilder, more diverse), and T&rarr;0 recovers greedy. <strong>Truncation</strong> then trims the unreliable tail &mdash; <em>top-k</em> keeps the k most likely tokens, <em>top-p</em> (nucleus) keeps the smallest set whose probability mass exceeds p, adapting how many options it considers to how confident the model is. None of this touches the weights; it's purely how you read the same model.</p></div>
   <section class="visuals" aria-label="Visual walkthrough"><div class="visual-kicker">Visual walkthrough</div><div class="visual-grid"><figure class="visual-card"><img src="assets/visuals/10-1-greedy-loop.webp" alt="Tallest probability bar looping back into repeated token choices." loading="lazy" decoding="async"><figcaption><strong>Greedy loop</strong>Always taking the top token is locally safe but can fall into repetition.</figcaption></figure><figure class="visual-card"><img src="assets/visuals/10-2-temperature-shape.webp" alt="Probability bars reshaped from sharp to broad by heated particle flow." loading="lazy" decoding="async"><figcaption><strong>Temperature</strong>Temperature sharpens or flattens the distribution before sampling.</figcaption></figure><figure class="visual-card"><img src="assets/visuals/10-3-topk-topp-filter.webp" alt="Probability distribution with tail candidates filtered behind a cutoff gate." loading="lazy" decoding="async"><figcaption><strong>Top-k and top-p</strong>Truncation removes the unreliable tail while keeping enough variety.</figcaption></figure></div></section>
-  <div class="term">
-    <div class="top"><span class="dot g"></span><span class="dot"></span><span class="dot"></span>
-      <span>10_sampling.py</span><span class="out-lab">output</span></div>
-    <pre>GREEDY  (gets stuck):
-  the world of the world of the world...
-
-TEMPERATURE 1.5  (wild, creative):
-  thyremh, discops: LeWlooke me hand
-
-TOP-P 0.9  (coherent and varied):
-  KING HENRY VI: There shall seek so your way</pre>
-  </div>
-  <div class="srch">Full source &middot; <span>10_sampling.py</span></div>
-  <div class="term">
-    <div class="top"><span class="dot g"></span><span class="dot"></span><span class="dot"></span>
-      <span>10_sampling.py</span><span class="out-lab">source</span></div>
-    <pre><code class="language-python">"""
-#10 in the "NN to tiny LLM" ladder.
-
-A trained model outputs a probability for every possible next token. HOW we
-pick from that distribution dramatically changes the text — without touching
-the weights at all. These are the "generation" or "decoding" strategies, and
-they're exactly the knobs an API like ChatGPT exposes (temperature, top_p...).
-
-  - GREEDY            : always take the single most likely token. Safe but
-                        repetitive, often loops.
-  - TEMPERATURE       : divide the logits by T before softmax.
-                        T&lt;1 -&gt; sharper/safer, T&gt;1 -&gt; flatter/wilder, T=1 -&gt; raw.
-  - TOP-K             : keep only the k most likely tokens, sample among them.
-  - TOP-P (nucleus)   : keep the smallest set of tokens whose probabilities sum
-                        to p, sample among them. Adapts how many options it
-                        considers to how confident the model is.
-
-We LOAD the model trained in #9 (tiny_gpt.pt) — no retraining — and compare the
-strategies side by side on the same seed.
-
-Run with:  python 10_sampling.py   (requires tiny_gpt.pt from running #9 first)
-"""
-
-import importlib.util
+  <div class="srch">The notebook &middot; <span>10_sampling.ipynb</span> &mdash; code cells &amp; their output. <a href="https://github.com/anchitgupt/learn_llm_code/blob/main/10_sampling.ipynb">Open &amp; run on GitHub &rarr;</a></div>
+  <div class="term"><div class="top"><span class="dot g"></span><span class="dot"></span><span class="dot"></span><span class="out-lab">In [1]</span></div><pre><code class="language-python">import importlib.util
 import os
 
 import torch
@@ -145,36 +107,115 @@ def sample_greedy(model, n_tokens=300):
 
 def show(title, text):
     print(f"\n{'=' * 60}\n{title}\n{'=' * 60}")
-    print(text.strip())
+    print(text.strip())</code></pre></div>
+<div class="term"><div class="top"><span class="dot g"></span><span class="dot"></span><span class="dot"></span><span class="out-lab">In [2]</span></div><pre><code class="language-python">model = load_model()
+print(f"loaded {tg.CKPT_PATH} — comparing decoding strategies "
+      f"(no retraining)\n")
+
+show("GREEDY  (always the top token — watch it get stuck/repeat)",
+     sample_greedy(model, 250))
+
+show("TEMPERATURE 0.5  (timid, safe, more repetitive)",
+     sample(model, 250, temperature=0.5))
+
+show("TEMPERATURE 1.0  (the raw distribution)",
+     sample(model, 250, temperature=1.0))
+
+show("TEMPERATURE 1.5  (wild, creative, more typos)",
+     sample(model, 250, temperature=1.5))
+
+show("TOP-K = 10  (only the 10 likeliest tokens each step)",
+     sample(model, 250, top_k=10))
+
+show("TOP-P = 0.9  (nucleus: adaptive shortlist)",
+     sample(model, 250, top_p=0.9))
+
+print("\n\nSame weights, six different writers. This is why one model can "
+      "be\nmade 'creative' or 'precise' just by changing decoding settings.")</code></pre></div>
+<div class="term"><div class="top"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="out-lab">Output</span></div><pre>loaded tiny_gpt.pt — comparing decoding strategies (no retraining)
 
 
-if __name__ == "__main__":
-    model = load_model()
-    print(f"loaded {tg.CKPT_PATH} — comparing decoding strategies "
-          f"(no retraining)\n")
+============================================================
+GREEDY  (always the top token — watch it get stuck/repeat)
+============================================================
+CLARENCE:
+I will not the word, and the world of the world,
+And the world of the world of the world of the world,
+And the world of the world of the world of the world,
+And the world of the world of the world of the world,
+And the world of the world o
 
-    show("GREEDY  (always the top token — watch it get stuck/repeat)",
-         sample_greedy(model, 250))
+============================================================
+TEMPERATURE 0.5  (timid, safe, more repetitive)
+============================================================
+POMPEY:
+Not what the death earth was will strange of the house;
+The charge of so in the good of strange of this perfaction
+Where to not my father well stone.
 
-    show("TEMPERATURE 0.5  (timid, safe, more repetitive)",
-         sample(model, 250, temperature=0.5))
+CLARENCE:
+And the contry of the care an I fearful him
+Fill me to here their come shall me
 
-    show("TEMPERATURE 1.0  (the raw distribution)",
-         sample(model, 250, temperature=1.0))
+============================================================
+TEMPERATURE 1.0  (the raw distribution)
+============================================================
+thy farms the London, our moethan youd I tle ear
+Thou would forgethre hath think of lifes. I have that
+Why writ appeach of your foer nend hands
+How purson to a man in hither.
 
-    show("TEMPERATURE 1.5  (wild, creative, more typos)",
-         sample(model, 250, temperature=1.5))
+DUCHESS OF YORK:
+Branchant, praying and love,--
+I'll am exception, for my
 
-    show("TOP-K = 10  (only the 10 likeliest tokens each step)",
-         sample(model, 250, top_k=10))
+============================================================
+TEMPERATURE 1.5  (wild, creative, more typos)
+============================================================
+thyremh, discops:
+LeWlooke me hand, iddigels fendedom,--yond nameker? hath Do.
+ O, else make him; that's your wakewell.
+As idart, Ramn:- my father well yet for 'filioe?
 
-    show("TOP-P = 0.9  (nucleus: adaptive shortlist)",
-         sample(model, 250, top_p=0.9))
+LEONTESS:
+Hows up the cre.Show
+Good faith.
 
-    print("\n\nSame weights, six different writers. This is why one model can "
-          "be\nmade 'creative' or 'precise' just by changing decoding settings.")
-</code></pre>
-  </div>
+First Woe,not sayfeign of lively: O
+
+============================================================
+TOP-K = 10  (only the 10 likeliest tokens each step)
+============================================================
+Thy farms the prevence, and that's all whelse, I
+
+Forse:
+I din you nech the honour'd offender in stip forgeth
+But we alcosency thee, send have too well stone.
+
+SLY:
+Methough the connossues,
+I shall falmong fair in mily moon, heaven,
+In to the flaim,
+
+============================================================
+TOP-P = 0.9  (nucleus: adaptive shortlist)
+============================================================
+That make hear seven to can expany,
+Now here fell commend his tower.
+
+KING HENRY VI:
+There shall seek so your way weap.
+
+KING EDWARD IV:
+What thou well you for made of the wintes.
+
+MENENIUS:
+No, I for my praying and love,
+So, the maring of lively me
+
+
+Same weights, six different writers. This is why one model can be
+made 'creative' or 'precise' just by changing decoding settings.</pre></div>
   <div class="pager"><a class="prev" href="09_tiny_gpt.html"><div class="dir">&larr; Previous</div><div class="pt">09 &middot; A real GPT</div></a><a class="next" href="11_train_loop.html"><div class="dir">Next &rarr;</div><div class="pt">11 &middot; Production training</div></a></div>
 </div></section>
 

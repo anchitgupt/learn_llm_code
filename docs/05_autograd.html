@@ -32,38 +32,8 @@
 <p>The proof: the auto-computed gradient matches a numerical estimate exactly. You write only the forward math; the backward pass builds itself. That's all PyTorch's autograd is.</p></div>
   <div class="eq">reverse-mode autodiff:&emsp;&part;L/&part;u = &Sigma; (&part;L/&part;v)&middot;(&part;v/&part;u)&emsp;over children v of u<span class="cap">every value remembers its parents and a local derivative; .backward() applies the chain rule in reverse.</span></div><div class="theory"><div class="lab">The theory</div><p>Hand-deriving gradients doesn't scale, so frameworks use <strong>reverse-mode automatic differentiation</strong>. As the forward pass runs, it records a <em>computational graph</em>: every intermediate value remembers which values produced it and a local rule for its derivative. This is not numerical approximation nor symbolic algebra &mdash; it's exact, computed by composing local derivatives.</p><p>The backward pass walks that graph from the output back to the inputs in topological order, multiplying and accumulating local derivatives (the chain rule) to get <code>&part;loss/&part;parameter</code> for every parameter at once. Remarkably, the whole backward pass costs about the same as one forward pass &mdash; which is what makes training networks with billions of parameters feasible.</p></div>
   <section class="visuals" aria-label="Visual walkthrough"><div class="visual-kicker">Visual walkthrough</div><div class="visual-grid"><figure class="visual-card"><img src="assets/visuals/05-1-forward-graph.webp" alt="Scalar computation graph flowing from inputs to a final output node." loading="lazy" decoding="async"><figcaption><strong>Forward graph</strong>Each scalar operation records the values that produced it.</figcaption></figure><figure class="visual-card"><img src="assets/visuals/05-2-local-rules.webp" alt="Computation nodes with small derivative-rule modules attached." loading="lazy" decoding="async"><figcaption><strong>Local rules</strong>Every operation stores a tiny derivative rule for its immediate parents.</figcaption></figure><figure class="visual-card"><img src="assets/visuals/05-3-backward-gradients.webp" alt="Amber gradient arrows flowing backward through a computation graph." loading="lazy" decoding="async"><figcaption><strong>Reverse pass</strong>Backward walks the graph in reverse, accumulating gradients at the parameters.</figcaption></figure></div></section>
-  <div class="term">
-    <div class="top"><span class="dot g"></span><span class="dot"></span><span class="dot"></span>
-      <span>05_autograd.py</span><span class="out-lab">output</span></div>
-    <pre>forward output: Value(data=0.7064)
-
-gradients (computed automatically):
-  w1.grad = 1.0019
-numeric check of w1.grad: 1.0019  (matches)</pre>
-  </div>
-  <div class="srch">Full source &middot; <span>05_autograd.py</span></div>
-  <div class="term">
-    <div class="top"><span class="dot g"></span><span class="dot"></span><span class="dot"></span>
-      <span>05_autograd.py</span><span class="out-lab">source</span></div>
-    <pre><code class="language-python">"""
-#5 in the "NN to tiny LLM" ladder.  (the "aha" rung)
-
-So far we've hand-derived every gradient with the chain rule. PyTorch does this
-for you AUTOMATICALLY. This file builds a tiny version of that magic — a
-scalar-valued autograd engine, in the spirit of Karpathy's "micrograd".
-
-The trick: every Value remembers
-  (a) the numbers that produced it (its "parents"), and
-  (b) a local rule for sending gradient back to those parents (`_backward`).
-
-Calling `.backward()` on the final result walks this graph in reverse, applying
-the chain rule at each node. You write the FORWARD math normally; the backward
-pass assembles itself. That is the entire idea behind PyTorch's autograd.
-
-Run with:  python autograd.py
-"""
-
-import math
+  <div class="srch">The notebook &middot; <span>05_autograd.ipynb</span> &mdash; code cells &amp; their output. <a href="https://github.com/anchitgupt/learn_llm_code/blob/main/05_autograd.ipynb">Open &amp; run on GitHub &rarr;</a></div>
+  <div class="term"><div class="top"><span class="dot g"></span><span class="dot"></span><span class="dot"></span><span class="out-lab">In [1]</span></div><pre><code class="language-python">import math
 
 
 class Value:
@@ -143,37 +113,42 @@ class Value:
         # 2. Seed: d(self)/d(self) = 1, then apply each _backward in reverse.
         self.grad = 1.0
         for node in reversed(topo):
-            node._backward()
+            node._backward()</code></pre></div>
+<div class="term"><div class="top"><span class="dot g"></span><span class="dot"></span><span class="dot"></span><span class="out-lab">In [2]</span></div><pre><code class="language-python"># A tiny neuron: out = tanh(w1*x1 + w2*x2 + b)
+x1, x2 = Value(2.0), Value(0.0)
+w1, w2 = Value(-3.0), Value(1.0)
+b = Value(6.88)
 
+n = x1 * w1 + x2 * w2 + b
+out = n.tanh()
 
-if __name__ == "__main__":
-    # A tiny neuron: out = tanh(w1*x1 + w2*x2 + b)
-    x1, x2 = Value(2.0), Value(0.0)
-    w1, w2 = Value(-3.0), Value(1.0)
-    b = Value(6.88)
+print("forward output:", out)
 
-    n = x1 * w1 + x2 * w2 + b
-    out = n.tanh()
+out.backward()   # &lt;-- gradients computed automatically, no hand-derivation
 
-    print("forward output:", out)
+print("\ngradients (how each input nudges the output):")
+print(f"  x1.grad = {x1.grad:.4f}")
+print(f"  w1.grad = {w1.grad:.4f}")
+print(f"  x2.grad = {x2.grad:.4f}")
+print(f"  w2.grad = {w2.grad:.4f}")
+print(f"   b.grad = {b.grad:.4f}")
 
-    out.backward()   # &lt;-- gradients computed automatically, no hand-derivation
+# Sanity check w1.grad numerically: nudge w1 a hair and see how out moves.
+eps = 1e-6
+base = (x1.data * w1.data + x2.data * w2.data + b.data)
+f = lambda w: math.tanh(x1.data * w + x2.data * w2.data + b.data)
+numeric = (f(w1.data + eps) - f(w1.data)) / eps
+print(f"\nnumeric check of w1.grad: {numeric:.4f}  (should match above)")</code></pre></div>
+<div class="term"><div class="top"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="out-lab">Output</span></div><pre>forward output: Value(data=0.7064, grad=0.0000)
 
-    print("\ngradients (how each input nudges the output):")
-    print(f"  x1.grad = {x1.grad:.4f}")
-    print(f"  w1.grad = {w1.grad:.4f}")
-    print(f"  x2.grad = {x2.grad:.4f}")
-    print(f"  w2.grad = {w2.grad:.4f}")
-    print(f"   b.grad = {b.grad:.4f}")
+gradients (how each input nudges the output):
+  x1.grad = -1.5029
+  w1.grad = 1.0019
+  x2.grad = 0.5010
+  w2.grad = 0.0000
+   b.grad = 0.5010
 
-    # Sanity check w1.grad numerically: nudge w1 a hair and see how out moves.
-    eps = 1e-6
-    base = (x1.data * w1.data + x2.data * w2.data + b.data)
-    f = lambda w: math.tanh(x1.data * w + x2.data * w2.data + b.data)
-    numeric = (f(w1.data + eps) - f(w1.data)) / eps
-    print(f"\nnumeric check of w1.grad: {numeric:.4f}  (should match above)")
-</code></pre>
-  </div>
+numeric check of w1.grad: 1.0019  (should match above)</pre></div>
   <div class="pager"><a class="prev" href="04_mlp_lm.html"><div class="dir">&larr; Previous</div><div class="pt">04 &middot; Embeddings &amp; context</div></a><a class="next" href="06_switch_to_pytorch.html"><div class="dir">Next &rarr;</div><div class="pt">06 &middot; Switching to PyTorch</div></a></div>
 </div></section>
 

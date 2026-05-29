@@ -32,45 +32,8 @@
 <p>Starting from the #12 model and a frozen reference copy, DPO widens the chosen-vs-rejected gap from +54 to +96 &mdash; with no reward model and no RL. This is essentially how modern open models are aligned today.</p></div>
   <div class="eq">L = &minus;log &sigma;( &beta;[ (log &pi;_&theta;(y_w) &minus; log &pi;_ref(y_w)) &minus; (log &pi;_&theta;(y_l) &minus; log &pi;_ref(y_l)) ] )<span class="cap">DPO: one classification loss over (chosen y_w, rejected y_l) pairs &mdash; no reward model, no RL.</span></div><div class="theory"><div class="lab">The theory</div><p>Classic <strong>RLHF</strong> aligns a model in three stages: collect human preferences, train a separate <em>reward model</em>, then optimize the policy against it with reinforcement learning (PPO) under a KL penalty. It works but is heavy and unstable &mdash; three models and an RL loop.</p><p><strong>DPO</strong>'s insight is that the RLHF objective has a closed-form optimum linking the reward to the log-ratio between the policy and a frozen <em>reference</em> model. That lets you skip the reward model and the RL entirely and optimize preferences <em>directly</em> with a simple binary-classification loss on (chosen, rejected) pairs. The coefficient &beta; controls how far the policy may drift from the reference (an implicit KL constraint). Same alignment effect, far simpler and more stable &mdash; today's stacks chain SFT &rarr; DPO &rarr; GRPO/RLVR for reasoning.</p></div>
   <section class="visuals" aria-label="Visual walkthrough"><div class="visual-kicker">Visual walkthrough</div><div class="visual-grid"><figure class="visual-card"><img src="assets/visuals/13-1-chosen-rejected.webp" alt="Two response paths, one bright chosen path and one dim rejected path." loading="lazy" decoding="async"><figcaption><strong>Preference pair</strong>DPO trains on a chosen response and a rejected response from the same prompt.</figcaption></figure><figure class="visual-card"><img src="assets/visuals/13-2-policy-reference.webp" alt="Two model blocks side by side emitting comparable probability streams." loading="lazy" decoding="async"><figcaption><strong>Policy and reference</strong>The trainable policy is compared against a frozen reference copy.</figcaption></figure><figure class="visual-card"><img src="assets/visuals/13-3-preference-gap.webp" alt="Chosen response probability rising while rejected probability falls." loading="lazy" decoding="async"><figcaption><strong>Wider gap</strong>Optimization increases the chosen-vs-rejected log-probability margin.</figcaption></figure></div></section>
-  <div class="term">
-    <div class="top"><span class="dot g"></span><span class="dot"></span><span class="dot"></span>
-      <span>13_dpo.py</span><span class="out-lab">output</span></div>
-    <pre>BEFORE DPO:  chosen-minus-rejected gap: +54.22
-training (chosen &gt; rejected)...
-step  400  loss 0.014
-AFTER  DPO:  chosen-minus-rejected gap: +96.06</pre>
-  </div>
-  <div class="srch">Full source &middot; <span>13_dpo.py</span></div>
-  <div class="term">
-    <div class="top"><span class="dot g"></span><span class="dot"></span><span class="dot"></span>
-      <span>13_dpo.py</span><span class="out-lab">source</span></div>
-    <pre><code class="language-python">"""
-#13 in the "NN to tiny LLM" ladder.  (the latest post-training method)
-
-#12 did instruction tuning (SFT): teach the model to answer. But SFT only shows
-the model GOOD answers — it never sees what a BAD answer looks like. PREFERENCE
-TUNING fixes that: we give the model pairs of (chosen, rejected) responses and
-teach it to prefer the chosen one.
-
-In 2026 the standard, accessible way to do this is DPO — Direct Preference
-Optimization (Rafailov et al., 2023). Classic RLHF needs THREE models and a
-reinforcement-learning loop (a reward model + the policy + a critic). DPO proved
-you can skip all of that and get the same effect with a single, simple loss:
-
-    loss = -log_sigmoid( beta * [ (logp_chosen  - logp_chosen_ref )
-                                 - (logp_rejected - logp_rejected_ref) ] )
-
-Intuition: push UP the probability of the chosen response and push DOWN the
-rejected one — but only RELATIVE to a frozen REFERENCE copy of the model, so it
-improves preferences without drifting far from what it already knows.
-
-We start from the SFT model (#12, tiny_gpt_chat.pt), keep a frozen copy as the
-reference, and optimise the policy on (prompt, chosen, rejected) triples.
-
-Run with:  python 13_dpo.py   (requires tiny_gpt_chat.pt from running #12 first)
-"""
-
-import importlib.util
+  <div class="srch">The notebook &middot; <span>13_dpo.ipynb</span> &mdash; code cells &amp; their output. <a href="https://github.com/anchitgupt/learn_llm_code/blob/main/13_dpo.ipynb">Open &amp; run on GitHub &rarr;</a></div>
+  <div class="term"><div class="top"><span class="dot g"></span><span class="dot"></span><span class="dot"></span><span class="out-lab">In [1]</span></div><pre><code class="language-python">import importlib.util
 import os
 
 import torch
@@ -179,38 +142,48 @@ def dpo_train():
 
     torch.save({"model": policy.state_dict(), "chars": tg.chars}, DPO_PATH)
     print(f"\nsaved DPO model -&gt; {DPO_PATH}")
-    return policy
+    return policy</code></pre></div>
+<div class="term"><div class="top"><span class="dot g"></span><span class="dot"></span><span class="dot"></span><span class="out-lab">In [2]</span></div><pre><code class="language-python">if not os.path.exists(SFT_PATH):
+    raise SystemExit("No tiny_gpt_chat.pt — run `python 12_finetune.py` first.")
+
+sft = load_model(SFT_PATH)
+before_gap, before_acc = margins(sft)
+print(f"BEFORE DPO (the SFT model from #12):")
+print(f"  mean chosen-minus-rejected logprob gap: {before_gap:+.2f}")
+print(f"  chosen preferred in {before_acc:.0%} of pairs\n")
+
+if os.path.exists(DPO_PATH):
+    policy = load_model(DPO_PATH)
+    print(f"loaded existing DPO model from {DPO_PATH} "
+          f"(delete it to re-run)\n")
+else:
+    policy = dpo_train()
+
+after_gap, after_acc = margins(policy)
+print(f"\nAFTER DPO:")
+print(f"  mean chosen-minus-rejected logprob gap: {after_gap:+.2f}")
+print(f"  chosen preferred in {after_acc:.0%} of pairs")
+
+print(f"\nThe gap widened from {before_gap:+.2f} to {after_gap:+.2f}: the "
+      f"model now\nassigns much MORE probability to the preferred answers "
+      f"than to the\nrejected ones — without a reward model or any RL. "
+      f"That is DPO, and it\nis essentially how modern open models are "
+      f"aligned today.")</code></pre></div>
+<div class="term"><div class="top"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="out-lab">Output</span></div><pre>BEFORE DPO (the SFT model from #12):
+  mean chosen-minus-rejected logprob gap: +54.22
+  chosen preferred in 100% of pairs
+
+loaded existing DPO model from tiny_gpt_dpo.pt (delete it to re-run)
 
 
-if __name__ == "__main__":
-    if not os.path.exists(SFT_PATH):
-        raise SystemExit("No tiny_gpt_chat.pt — run `python 12_finetune.py` first.")
+AFTER DPO:
+  mean chosen-minus-rejected logprob gap: +96.27
+  chosen preferred in 100% of pairs
 
-    sft = load_model(SFT_PATH)
-    before_gap, before_acc = margins(sft)
-    print(f"BEFORE DPO (the SFT model from #12):")
-    print(f"  mean chosen-minus-rejected logprob gap: {before_gap:+.2f}")
-    print(f"  chosen preferred in {before_acc:.0%} of pairs\n")
-
-    if os.path.exists(DPO_PATH):
-        policy = load_model(DPO_PATH)
-        print(f"loaded existing DPO model from {DPO_PATH} "
-              f"(delete it to re-run)\n")
-    else:
-        policy = dpo_train()
-
-    after_gap, after_acc = margins(policy)
-    print(f"\nAFTER DPO:")
-    print(f"  mean chosen-minus-rejected logprob gap: {after_gap:+.2f}")
-    print(f"  chosen preferred in {after_acc:.0%} of pairs")
-
-    print(f"\nThe gap widened from {before_gap:+.2f} to {after_gap:+.2f}: the "
-          f"model now\nassigns much MORE probability to the preferred answers "
-          f"than to the\nrejected ones — without a reward model or any RL. "
-          f"That is DPO, and it\nis essentially how modern open models are "
-          f"aligned today.")
-</code></pre>
-  </div>
+The gap widened from +54.22 to +96.27: the model now
+assigns much MORE probability to the preferred answers than to the
+rejected ones — without a reward model or any RL. That is DPO, and it
+is essentially how modern open models are aligned today.</pre></div>
   <div class="pager"><a class="prev" href="12_finetune.html"><div class="dir">&larr; Previous</div><div class="pt">12 &middot; Instruction tuning</div></a><a class="next" href="14_modern_gpt.html"><div class="dir">Next &rarr;</div><div class="pt">14 &middot; The 2026 architecture</div></a></div>
 </div></section>
 

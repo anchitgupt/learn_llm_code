@@ -32,37 +32,8 @@
 <p>From here we never hand-derive a gradient again &mdash; which is exactly what frees us to build something as intricate as a transformer.</p></div>
   <div class="eq">loss.backward()&emsp;&equiv;&emsp;the autograd graph of #05, on tensors&emsp;&middot;&emsp;optimizer.step()<span class="cap">PyTorch = tensors + autograd + modules + optimizers, GPU-accelerated.</span></div><div class="theory"><div class="lab">The theory</div><p>PyTorch packages the ideas so far into reusable machinery: <strong>tensors</strong> (n-dimensional arrays that track gradients), <strong>nn.Module</strong> (parameter bookkeeping), <strong>optimizers</strong>, and GPU acceleration. A single <code>loss.backward()</code> runs the same reverse-mode autodiff you built in #05, but over whole tensors; <code>optimizer.step()</code> applies the update rule to every parameter.</p><p>The optimizer matters: plain SGD uses one global learning rate, while <strong>Adam/AdamW</strong> keep per-parameter running estimates of the gradient's mean and variance to adapt each step size &mdash; far more robust for deep networks. This abstraction is exactly what frees the next steps to build something as intricate as a transformer without ever writing a gradient by hand.</p></div>
   <section class="visuals" aria-label="Visual walkthrough"><div class="visual-kicker">Visual walkthrough</div><div class="visual-grid"><figure class="visual-card"><img src="assets/visuals/06-1-manual-gradients.webp" alt="Dense manual gradient wiring around tensor-like blocks." loading="lazy" decoding="async"><figcaption><strong>Manual gradients</strong>The hand-derived derivative wiring grows messy as models get larger.</figcaption></figure><figure class="visual-card"><img src="assets/visuals/06-2-tensor-autograd.webp" alt="Tensor blocks flowing through reusable layers with an autograd graph." loading="lazy" decoding="async"><figcaption><strong>Tensor autograd</strong>PyTorch records tensor operations and runs reverse-mode autodiff over the graph.</figcaption></figure><figure class="visual-card"><img src="assets/visuals/06-3-optimizer-step.webp" alt="Optimizer loop updating model parameter blocks after backward signals." loading="lazy" decoding="async"><figcaption><strong>Optimizer update</strong>After backward, the optimizer applies the parameter update in one step.</figcaption></figure></div></section>
-  <div class="term">
-    <div class="top"><span class="dot g"></span><span class="dot"></span><span class="dot"></span>
-      <span>06_switch_to_pytorch.py</span><span class="out-lab">output</span></div>
-    <pre>dataset: 192 examples | model: 3571 parameters
-epoch 1800  loss 0.6855
-
-Generated names:
-  benjamin   sophia   olivia   anya</pre>
-  </div>
-  <div class="srch">Full source &middot; <span>06_switch_to_pytorch.py</span></div>
-  <div class="term">
-    <div class="top"><span class="dot g"></span><span class="dot"></span><span class="dot"></span>
-      <span>06_switch_to_pytorch.py</span><span class="out-lab">source</span></div>
-    <pre><code class="language-python">"""
-#6 in the "NN to tiny LLM" ladder.
-
-The SAME MLP language model from #4 (mlp_lm.py) — embeddings + context window +
-hidden layer — but written in PyTorch. Compare the two files side by side:
-
-  - The forward pass is almost identical to our NumPy version.
-  - ALL the hand-coded backprop from #4 collapses into one line: loss.backward()
-    (PyTorch's autograd, exactly the engine you built in #5, doing the work).
-  - Parameter updates become an optimizer: optimizer.step().
-
-This is the toolkit we'll use to build the transformer. Once you trust that
-this matches #4, we never hand-derive a gradient again.
-
-Run with:  python switch_to_pytorch.py
-"""
-
-import torch
+  <div class="srch">The notebook &middot; <span>06_switch_to_pytorch.ipynb</span> &mdash; code cells &amp; their output. <a href="https://github.com/anchitgupt/learn_llm_code/blob/main/06_switch_to_pytorch.ipynb">Open &amp; run on GitHub &rarr;</a></div>
+  <div class="term"><div class="top"><span class="dot g"></span><span class="dot"></span><span class="dot"></span><span class="out-lab">In [1]</span></div><pre><code class="language-python">import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
@@ -142,22 +113,43 @@ def generate(model, max_len=20):
             break
         out.append(ITOS[idx])
         context = context[1:] + [idx]
-    return "".join(out)
+    return "".join(out)</code></pre></div>
+<div class="term"><div class="top"><span class="dot g"></span><span class="dot"></span><span class="dot"></span><span class="out-lab">In [2]</span></div><pre><code class="language-python">X, Y = build_dataset(WORDS)
+n_params = sum(p.numel() for p in MLP().parameters())
+print(f"dataset: {len(X)} examples | model: {n_params} parameters\n")
 
+model = MLP()
+train(model, X, Y)
 
-if __name__ == "__main__":
-    X, Y = build_dataset(WORDS)
-    n_params = sum(p.numel() for p in MLP().parameters())
-    print(f"dataset: {len(X)} examples | model: {n_params} parameters\n")
+print("\nGenerated names:")
+for _ in range(12):
+    print("  " + generate(model))</code></pre></div>
+<div class="term"><div class="top"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="out-lab">Output</span></div><pre>dataset: 192 examples | model: 3571 parameters
 
-    model = MLP()
-    train(model, X, Y)
+epoch    0  loss 3.3402
+epoch  200  loss 1.6498
+epoch  400  loss 1.2505
+epoch  600  loss 0.9935
+epoch  800  loss 0.8471
+epoch 1000  loss 0.7713
+epoch 1200  loss 0.7315
+epoch 1400  loss 0.7089
+epoch 1600  loss 0.6948
+epoch 1800  loss 0.6855
 
-    print("\nGenerated names:")
-    for _ in range(12):
-        print("  " + generate(model))
-</code></pre>
-  </div>
+Generated names:
+  benjamin
+  leo
+  isy
+  woliver
+  lia
+  nna
+  huna
+  anya
+  sophia
+  olivia
+  jameliam
+  ames</pre></div>
   <div class="pager"><a class="prev" href="05_autograd.html"><div class="dir">&larr; Previous</div><div class="pt">05 &middot; Automatic differentiation</div></a><a class="next" href="07_self_attention.html"><div class="dir">Next &rarr;</div><div class="pt">07 &middot; Self-attention</div></a></div>
 </div></section>
 

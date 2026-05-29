@@ -32,49 +32,8 @@
 <p>Proven on the #14 model: <strong>identical output</strong> to the naive loop with ~31× less work. And this is where #14's <strong>GQA</strong> finally pays off — a grouped-query model caches fewer kv-heads, so the cache itself is smaller.</p></div>
   <div class="eq">memory = 2 &middot; L &middot; n_kv &middot; d_head &middot; T&emsp;&middot;&emsp;work:  na&iuml;ve &asymp; T&sup2;/2  &rarr;  cached = T<span class="cap">past keys/values never change, so cache them instead of recomputing.</span></div><div class="theory"><div class="lab">The theory</div><p>During autoregressive decoding, the keys and values of all previous tokens are <em>fixed</em> once computed &mdash; yet the naive loop recomputes them at every step, costing O(T&sup2;) for a T-token generation. The <strong>KV cache</strong> stores each layer's past K and V and simply appends the new token's K/V each step, so a step is O(1) projection plus attention over the cache &mdash; making the whole generation O(T).</p><p>The cache grows linearly with context length and, at long contexts, becomes the dominant consumer of inference memory (often larger than the weights). This is where #14's <strong>GQA</strong> pays off concretely: fewer key/value heads means a proportionally smaller cache. The output is bit-for-bit identical to the naive loop &mdash; it's the same mathematics, just not recomputed.</p></div>
   <section class="visuals" aria-label="Visual walkthrough"><div class="visual-kicker">Visual walkthrough</div><div class="visual-grid"><figure class="visual-card"><img src="assets/visuals/15-1-naive-recompute.webp" alt="Repeated triangular recomputation work for a growing token sequence." loading="lazy" decoding="async"><figcaption><strong>Naive recompute</strong>Without a cache, generation repeatedly re-encodes the whole growing context.</figcaption></figure><figure class="visual-card"><img src="assets/visuals/15-2-cache-append.webp" alt="Layered key-value cache shelves receiving one new block at a time." loading="lazy" decoding="async"><figcaption><strong>Append K/V</strong>The cache stores past keys and values, then appends only the new token's pair.</figcaption></figure><figure class="visual-card"><img src="assets/visuals/15-3-smaller-gqa-cache.webp" alt="Compact grouped-query cache feeding the same output stream." loading="lazy" decoding="async"><figcaption><strong>Smaller cache</strong>GQA reduces the number of key/value heads that must be stored.</figcaption></figure></div></section>
-  <div class="term">
-    <div class="top"><span class="dot g"></span><span class="dot"></span><span class="dot"></span>
-      <span>15_kv_cache.py</span><span class="out-lab">output</span></div>
-    <pre>=== Correctness ===
-naive and cached produce identical tokens: True
-sample: 'ROMEO:\nI shall be so seem the souls of the coursed...'
-
-=== Work done (token-forwards through the layers) ===
-naive : 1938   (~T^2/2 — recomputes the whole context each step)
-cached:   63   (T — one new token per step)   -&gt; 31x less work
-
-=== KV-cache memory @ full context (fp16) ===
-GQA (2 kv-heads): 48 KB   vs   full multi-head: 96 KB  (2x smaller)</pre>
-  </div>
-  <div class="srch">Full source &middot; <span>15_kv_cache.py</span></div>
-  <div class="term">
-    <div class="top"><span class="dot g"></span><span class="dot"></span><span class="dot"></span>
-      <span>15_kv_cache.py</span><span class="out-lab">source</span></div>
-    <pre><code class="language-python">"""
-#15 in the "NN to tiny LLM" ladder.  (fixing the KV-cache problem)
-
-Every generate() we've written so far has a hidden flaw. To produce one new
-token it reruns the WHOLE sequence through the network:
-
-    logits, _ = self(idx[:, -BLOCK_SIZE:])   # recompute keys/values for ALL tokens
-
-So generating T tokens costs ~T**2/2 token-forwards. The keys and values for the
-earlier tokens never change once computed, yet we recompute them every step.
-
-The fix is the KV CACHE: store each layer's past keys (K) and values (V), and at
-each step feed in only the ONE new token, attending its query over the cached
-K/V. That makes generation O(T) instead of O(T**2). This is also where #14's GQA
-finally pays off: a grouped-query model caches FEWER kv-heads, so the cache is
-smaller.
-
-This script reuses the trained #14 model (modern_gpt.pt), implements a cache-based
-decoder, and proves it produces the EXACT same tokens as the naive loop while
-doing far less work.
-
-Run with:  python 15_kv_cache.py   (requires modern_gpt.pt from running #14 first)
-"""
-
-import importlib.util
+  <div class="srch">The notebook &middot; <span>15_kv_cache.ipynb</span> &mdash; code cells &amp; their output. <a href="https://github.com/anchitgupt/learn_llm_code/blob/main/15_kv_cache.ipynb">Open &amp; run on GitHub &rarr;</a></div>
+  <div class="term"><div class="top"><span class="dot g"></span><span class="dot"></span><span class="dot"></span><span class="out-lab">In [1]</span></div><pre><code class="language-python">import importlib.util
 import os
 import time
 
@@ -162,47 +121,60 @@ def cached_generate(model, prompt, n_new):
 
 def cache_bytes(n_tokens, kv_heads, dtype_bytes=2):
     """Total KV-cache size: 2 (K&amp;V) x layers x kv_heads x head_dim x tokens."""
-    return 2 * mg.N_LAYER * kv_heads * mg.HEAD_DIM * n_tokens * dtype_bytes
+    return 2 * mg.N_LAYER * kv_heads * mg.HEAD_DIM * n_tokens * dtype_bytes</code></pre></div>
+<div class="term"><div class="top"><span class="dot g"></span><span class="dot"></span><span class="dot"></span><span class="out-lab">In [2]</span></div><pre><code class="language-python">if not os.path.exists(mg.CKPT_PATH):
+    raise SystemExit("No modern_gpt.pt — run `python 14_modern_gpt.py` first.")
+model = mg.ModernGPT().to(DEVICE)
+model.load_state_dict(torch.load(mg.CKPT_PATH, map_location=DEVICE)["model"])
+model.eval()
 
+prompt = tg.encode("ROMEO:")                         # a real prompt -&gt; readable output
+N = BLOCK - len(prompt) - 1                           # stay within the trained context
+naive_ids, naive_fw = naive_generate(model, prompt, N)
+cached_ids, cached_fw = cached_generate(model, prompt, N)
 
-if __name__ == "__main__":
-    if not os.path.exists(mg.CKPT_PATH):
-        raise SystemExit("No modern_gpt.pt — run `python 14_modern_gpt.py` first.")
-    model = mg.ModernGPT().to(DEVICE)
-    model.load_state_dict(torch.load(mg.CKPT_PATH, map_location=DEVICE)["model"])
-    model.eval()
+print("=== Correctness ===")
+print(f"naive and cached produce identical tokens: {naive_ids == cached_ids}")
+print(f"sample: {tg.decode(cached_ids)!r}\n")
 
-    prompt = tg.encode("ROMEO:")                         # a real prompt -&gt; readable output
-    N = BLOCK - len(prompt) - 1                           # stay within the trained context
-    naive_ids, naive_fw = naive_generate(model, prompt, N)
-    cached_ids, cached_fw = cached_generate(model, prompt, N)
+print("=== Work done (token-forwards through the layers) ===")
+print(f"naive : {naive_fw:5d}   (~T^2/2 — recomputes the whole context each step)")
+print(f"cached: {cached_fw:5d}   (T — prefill + one new token per step)")
+print(f"-&gt; {naive_fw / cached_fw:.0f}x less work for {N} new tokens\n")
 
-    print("=== Correctness ===")
-    print(f"naive and cached produce identical tokens: {naive_ids == cached_ids}")
-    print(f"sample: {tg.decode(cached_ids)!r}\n")
+print("=== Wall-clock (30 runs) ===")
+t0 = time.perf_counter(); [naive_generate(model, prompt, N) for _ in range(30)]
+t_naive = time.perf_counter() - t0
+t0 = time.perf_counter(); [cached_generate(model, prompt, N) for _ in range(30)]
+t_cached = time.perf_counter() - t0
+print(f"naive : {t_naive:.2f}s")
+print(f"cached: {t_cached:.2f}s   ({t_naive / t_cached:.1f}x faster)\n")
 
-    print("=== Work done (token-forwards through the layers) ===")
-    print(f"naive : {naive_fw:5d}   (~T^2/2 — recomputes the whole context each step)")
-    print(f"cached: {cached_fw:5d}   (T — prefill + one new token per step)")
-    print(f"-&gt; {naive_fw / cached_fw:.0f}x less work for {N} new tokens\n")
+print("=== KV-cache memory @ full context (fp16) ===")
+gqa = cache_bytes(BLOCK, mg.N_KV_HEAD)
+mha = cache_bytes(BLOCK, mg.N_HEAD)
+print(f"GQA ({mg.N_KV_HEAD} kv-heads): {gqa/1024:.1f} KB")
+print(f"full multi-head ({mg.N_HEAD} heads): {mha/1024:.1f} KB  "
+      f"-&gt; GQA is {mha/gqa:.0f}x smaller")
+print("\nThis cache is what Google's TurboQuant compresses (next: #16).")</code></pre></div>
+<div class="term"><div class="top"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="out-lab">Output</span></div><pre>=== Correctness ===
+naive and cached produce identical tokens: True
+sample: 'ROMEO:\nI shall be so seem the souls of the coursed\nThat well th'
 
-    print("=== Wall-clock (30 runs) ===")
-    t0 = time.perf_counter(); [naive_generate(model, prompt, N) for _ in range(30)]
-    t_naive = time.perf_counter() - t0
-    t0 = time.perf_counter(); [cached_generate(model, prompt, N) for _ in range(30)]
-    t_cached = time.perf_counter() - t0
-    print(f"naive : {t_naive:.2f}s")
-    print(f"cached: {t_cached:.2f}s   ({t_naive / t_cached:.1f}x faster)\n")
+=== Work done (token-forwards through the layers) ===
+naive :  1938   (~T^2/2 — recomputes the whole context each step)
+cached:    63   (T — prefill + one new token per step)
+-&gt; 31x less work for 57 new tokens
 
-    print("=== KV-cache memory @ full context (fp16) ===")
-    gqa = cache_bytes(BLOCK, mg.N_KV_HEAD)
-    mha = cache_bytes(BLOCK, mg.N_HEAD)
-    print(f"GQA ({mg.N_KV_HEAD} kv-heads): {gqa/1024:.1f} KB")
-    print(f"full multi-head ({mg.N_HEAD} heads): {mha/1024:.1f} KB  "
-          f"-&gt; GQA is {mha/gqa:.0f}x smaller")
-    print("\nThis cache is what Google's TurboQuant compresses (next: #16).")
-</code></pre>
-  </div>
+=== Wall-clock (30 runs) ===
+naive : 1.30s
+cached: 0.96s   (1.4x faster)
+
+=== KV-cache memory @ full context (fp16) ===
+GQA (2 kv-heads): 48.0 KB
+full multi-head (4 heads): 96.0 KB  -&gt; GQA is 2x smaller
+
+This cache is what Google's TurboQuant compresses (next: #16).</pre></div>
   <div class="pager"><a class="prev" href="14_modern_gpt.html"><div class="dir">&larr; Previous</div><div class="pt">14 &middot; The 2026 architecture</div></a><a class="next" href="16_kv_quant.html"><div class="dir">Next &rarr;</div><div class="pt">16 &middot; Compressing the cache · TurboQuant</div></a></div>
 </div></section>
 

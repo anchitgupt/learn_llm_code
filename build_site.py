@@ -8,8 +8,10 @@ Run with:  python build_site.py
 """
 
 import html
+import json
 import os
 import pathlib
+import re
 
 ROOT = pathlib.Path(__file__).parent
 DOCS = ROOT / "docs"
@@ -974,6 +976,53 @@ PRISM = ('\n<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/
          '\n<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-python.min.js"></script>\n')
 
 
+_ANSI = re.compile(r"\x1b\[[0-9;]*m")
+
+
+def _cell_outputs(cell):
+    """Collect a code cell's text outputs (stdout, results, errors)."""
+    chunks = []
+    for o in cell.get("outputs", []):
+        t = o.get("output_type")
+        if t == "stream":
+            chunks.append("".join(o.get("text", [])))
+        elif t in ("execute_result", "display_data"):
+            tp = o.get("data", {}).get("text/plain", "")
+            chunks.append("".join(tp) if isinstance(tp, list) else tp)
+        elif t == "error":
+            chunks.append("\n".join(o.get("traceback", [])))
+    return _ANSI.sub("", "".join(chunks))
+
+
+def _panel(label, inner, lit=True):
+    dot = '<span class="dot g"></span>' if lit else '<span class="dot"></span>'
+    return (f'<div class="term"><div class="top">{dot}<span class="dot"></span>'
+            f'<span class="dot"></span><span class="out-lab">{label}</span></div>{inner}</div>')
+
+
+def render_notebook(s):
+    """Render the executed .ipynb as styled code-cell + output blocks (Jupyter-
+    style). Returns '' if the notebook doesn't exist yet."""
+    p = ROOT / s["file"].replace(".py", ".ipynb")
+    if not p.exists():
+        return ""
+    nb = json.loads(p.read_text(encoding="utf-8"))
+    out, n = [], 0
+    for cell in nb.get("cells", []):
+        if cell.get("cell_type") != "code":
+            continue
+        src = "".join(cell.get("source", []))
+        if not src.strip():
+            continue
+        n += 1
+        out.append(_panel(f"In [{n}]",
+                          f'<pre><code class="language-python">{esc(src)}</code></pre>'))
+        otxt = _cell_outputs(cell)
+        if otxt.strip():
+            out.append(_panel("Output", f"<pre>{esc(otxt.rstrip())}</pre>", lit=False))
+    return "\n".join(out)
+
+
 def render_step_page(s, prev, nxt):
     """A full standalone HTML page for one script."""
     src = esc(read_source(s["file"]))
@@ -993,7 +1042,14 @@ def render_step_page(s, prev, nxt):
                  f'<div class="pt">{nxt["n"]} &middot; {esc(nxt["title"])}</div></a>'
                  if nxt else "<span></span>")
 
-    nb_url = f'{REPO}/blob/main/{s["file"].replace(".py", ".ipynb")}'
+    nb_name = s["file"].replace(".py", ".ipynb")
+    nb_url = f'{REPO}/blob/main/{nb_name}'
+
+    nb_html = render_notebook(s)
+    if not nb_html:   # fallback to raw output + .py source if no notebook yet
+        nb_html = (_panel("Output", f"<pre>{out}</pre>", lit=False)
+                   + _panel(esc(s['file']),
+                            f'<pre><code class="language-python">{src}</code></pre>'))
 
     head = HEAD.format(
         title=f"{s['n']} &middot; {esc(s['title'])} &mdash; Build an LLM from Scratch",
@@ -1018,17 +1074,8 @@ def render_step_page(s, prev, nxt):
   <div class="lead">{body}</div>
   {eq_theory_html(s)}
   {visual_gallery_html(s)}
-  <div class="term">
-    <div class="top"><span class="dot g"></span><span class="dot"></span><span class="dot"></span>
-      <span>{esc(s['file'])}</span><span class="out-lab">output</span></div>
-    <pre>{out}</pre>
-  </div>
-  <div class="srch">Full source &middot; <span>{esc(s['file'])}</span></div>
-  <div class="term">
-    <div class="top"><span class="dot g"></span><span class="dot"></span><span class="dot"></span>
-      <span>{esc(s['file'])}</span><span class="out-lab">source</span></div>
-    <pre><code class="language-python">{src}</code></pre>
-  </div>
+  <div class="srch">The notebook &middot; <span>{nb_name}</span> &mdash; code cells &amp; their output. <a href="{nb_url}">Open &amp; run on GitHub &rarr;</a></div>
+  {nb_html}
   <div class="pager">{prev_html}{next_html}</div>
 </div></section>
 

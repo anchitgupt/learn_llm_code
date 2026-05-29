@@ -32,56 +32,8 @@
 <p>Shown honestly: a rotation only helps heavy-tailed data, so on our tiny near-Gaussian model it's <em>neutral</em> — but on the outlier structure real LLMs have, rotate-then-quantize cuts error <strong>1.8×</strong> and lifts attention fidelity from <strong>0.67 → 0.85</strong>, at 5.3× compression.</p></div>
   <div class="eq">rotate by orthogonal Q  (&langle;Qa, Qb&rangle; = &langle;a, b&rangle;)  &rarr;  quantize  &rarr;  unrotate<span class="cap">a rotation preserves dot products while spreading outliers, so low bits suffice.</span></div><div class="theory"><div class="lab">The theory</div><p>Since cache memory is proportional to bits-per-value, low-bit <strong>quantization</strong> shrinks it directly. But per-tensor low-bit quantization fails on heavy-tailed data: a few <em>outlier coordinates</em> stretch the min&ndash;max range, forcing every ordinary value onto a coarse grid. Real transformer K/V are full of such outlier channels.</p><p><strong>TurboQuant</strong>'s trick is to rotate each vector by a random orthogonal (or Hadamard) matrix <em>before</em> quantizing. A rotation preserves lengths and &mdash; crucially &mdash; inner products, so attention scores are unchanged if queries are rotated the same way; meanwhile, by concentration of measure, it spreads the outliers' energy across all coordinates, eliminating them so low bits quantize cleanly. PolarQuant plus a residual-correction stage reaches ~3 bits, ~6&times; smaller and ~8&times; faster. The honest caveat (shown in the output): a Gaussian is rotation-invariant, so the trick only helps when outliers actually exist &mdash; which, in real models, they do.</p></div>
   <section class="visuals" aria-label="Visual walkthrough"><div class="visual-kicker">Visual walkthrough</div><div class="visual-grid"><figure class="visual-card"><img src="assets/visuals/16-1-outlier-channels.webp" alt="Vector histogram with a few tall amber outlier channels dominating the range." loading="lazy" decoding="async"><figcaption><strong>Outlier channels</strong>A few huge coordinates stretch the quantization range and waste low-bit precision.</figcaption></figure><figure class="visual-card"><img src="assets/visuals/16-2-rotation-spread.webp" alt="Outlier vector passing through a rotation plane into a more even distribution." loading="lazy" decoding="async"><figcaption><strong>Rotate and spread</strong>An orthogonal rotation spreads outlier energy while preserving attention dot products.</figcaption></figure><figure class="visual-card"><img src="assets/visuals/16-3-three-bit-cache.webp" alt="Compact quantized cache blocks feeding an attention layer." loading="lazy" decoding="async"><figcaption><strong>3-bit cache</strong>After rotation, the cache can be stored in very few bits with better fidelity.</figcaption></figure></div></section>
-  <div class="term">
-    <div class="top"><span class="dot g"></span><span class="dot"></span><span class="dot"></span>
-      <span>16_kv_quant.py</span><span class="out-lab">output</span></div>
-    <pre>=== Why outliers matter: rotation only helps heavy-tailed data ===
-tiny model's real keys: near-Gaussian  -&gt;  rotation ~neutral
-
-=== With realistic outlier channels (ratio 21) ===
-key reconstruction error @ 3-bit:
-  naive quantization   : 0.566
-  rotate-then-quantize  : 0.313   (1.8x lower)
-attention-output fidelity vs fp (cosine sim):
-  naive quantization   : 0.6658
-  rotate-then-quantize  : 0.8502
-memory: fp16 16 bits -&gt; 3-bit = 5.3x smaller</pre>
-  </div>
-  <div class="srch">Full source &middot; <span>16_kv_quant.py</span></div>
-  <div class="term">
-    <div class="top"><span class="dot g"></span><span class="dot"></span><span class="dot"></span>
-      <span>16_kv_quant.py</span><span class="out-lab">source</span></div>
-    <pre><code class="language-python">"""
-#16 in the "NN to tiny LLM" ladder.  (compressing the KV cache, TurboQuant-style)
-
-#15 gave us a KV cache. At long context lengths that cache — not the weights —
-becomes the memory bottleneck (it grows with every token). The fix is to store
-it in fewer bits. This is what Google Research's TurboQuant does (ICLR 2026,
-arXiv:2504.19874): it compresses the KV cache to ~3 bits/value with almost no
-quality loss — ~6x smaller, ~8x faster attention.
-
-The obstacle, and the trick:
-
-  PROBLEM: real K/V vectors have OUTLIER CHANNELS — a few coordinates with huge
-  magnitude. With one shared scale, naive low-bit quantization is forced to span
-  those outliers, so every ordinary value collapses onto a coarse grid.
-
-  TRICK (TurboQuant's PolarQuant stage): ROTATE each vector by a random
-  orthogonal matrix before quantizing. A rotation preserves lengths and dot
-  products (so attention scores are unchanged if you rotate queries the same
-  way), while smearing the outliers across all coordinates — so the rotated
-  vector quantizes cleanly. Quantize it, store it, rotate back on read.
-
-IMPORTANT / HONEST NOTE: a rotation only helps when outliers exist. A purely
-Gaussian tensor is rotation-invariant, so the trick does nothing for it. Our
-tiny Shakespeare model is too small to develop strong outliers (we measure this
-below), so we demonstrate the mechanism on a key matrix carrying the outlier
-structure that real, larger LLMs are documented to have.
-
-Run with:  python 16_kv_quant.py   (requires modern_gpt.pt from running #14 first)
-"""
-
-import importlib.util
+  <div class="srch">The notebook &middot; <span>16_kv_quant.ipynb</span> &mdash; code cells &amp; their output. <a href="https://github.com/anchitgupt/learn_llm_code/blob/main/16_kv_quant.ipynb">Open &amp; run on GitHub &rarr;</a></div>
+  <div class="term"><div class="top"><span class="dot g"></span><span class="dot"></span><span class="dot"></span><span class="out-lab">In [1]</span></div><pre><code class="language-python">import importlib.util
 import os
 
 import torch
@@ -141,60 +93,75 @@ def real_keys(model):
 
 def attention(q, k, v):
     scores = (q @ k.transpose(-2, -1)) / mg.HEAD_DIM ** 0.5
-    return F.softmax(scores, dim=-1) @ v
+    return F.softmax(scores, dim=-1) @ v</code></pre></div>
+<div class="term"><div class="top"><span class="dot g"></span><span class="dot"></span><span class="dot"></span><span class="out-lab">In [2]</span></div><pre><code class="language-python">if not os.path.exists(mg.CKPT_PATH):
+    raise SystemExit("No modern_gpt.pt — run `python 14_modern_gpt.py` first.")
+model = mg.ModernGPT().to(DEVICE)
+model.load_state_dict(torch.load(mg.CKPT_PATH, map_location=DEVICE)["model"])
+model.eval()
 
+d = mg.HEAD_DIM
+R = random_orthogonal(d)
+k_real = real_keys(model)
 
-if __name__ == "__main__":
-    if not os.path.exists(mg.CKPT_PATH):
-        raise SystemExit("No modern_gpt.pt — run `python 14_modern_gpt.py` first.")
-    model = mg.ModernGPT().to(DEVICE)
-    model.load_state_dict(torch.load(mg.CKPT_PATH, map_location=DEVICE)["model"])
-    model.eval()
+print("=== Why outliers matter: rotation only helps heavy-tailed data ===")
+print(f"our tiny model's real keys — outlier ratio (max/mean |k|): "
+      f"{outlier_ratio(k_real):.1f}  (near-Gaussian)")
+print(f"  naive {BITS}-bit error : {rel_error(quantize(k_real), k_real):.3f}")
+print(f"  rotated {BITS}-bit error: {rel_error(quantize(k_real @ R) @ R.T, k_real):.3f}"
+      f"   (rotation ~neutral — nothing to fix)\n")
 
-    d = mg.HEAD_DIM
-    R = random_orthogonal(d)
-    k_real = real_keys(model)
+# Emulate the outlier-channel structure that real, larger LLMs exhibit:
+# a handful of coordinates carry very large magnitude.
+T = k_real.shape[0]
+k = torch.randn(T, d, device=DEVICE) * 0.4
+v = torch.randn(T, d, device=DEVICE) * 0.4
+q = torch.randn(T, d, device=DEVICE) * 0.4
+for ch in (3, 11, 19):                           # outlier channels
+    k[:, ch] *= 14
+    v[:, ch] *= 14
+print(f"=== Now with realistic outlier channels (ratio {outlier_ratio(k):.0f}) ===")
 
-    print("=== Why outliers matter: rotation only helps heavy-tailed data ===")
-    print(f"our tiny model's real keys — outlier ratio (max/mean |k|): "
-          f"{outlier_ratio(k_real):.1f}  (near-Gaussian)")
-    print(f"  naive {BITS}-bit error : {rel_error(quantize(k_real), k_real):.3f}")
-    print(f"  rotated {BITS}-bit error: {rel_error(quantize(k_real @ R) @ R.T, k_real):.3f}"
-          f"   (rotation ~neutral — nothing to fix)\n")
+k_naive, k_rot = quantize(k), quantize(k @ R) @ R.T
+e_naive, e_rot = rel_error(k_naive, k), rel_error(k_rot, k)
+print(f"key reconstruction error @ {BITS}-bit:")
+print(f"  naive quantization      : {e_naive:.3f}")
+print(f"  rotate-then-quantize     : {e_rot:.3f}   ({e_naive / e_rot:.1f}x lower)\n")
 
-    # Emulate the outlier-channel structure that real, larger LLMs exhibit:
-    # a handful of coordinates carry very large magnitude.
-    T = k_real.shape[0]
-    k = torch.randn(T, d, device=DEVICE) * 0.4
-    v = torch.randn(T, d, device=DEVICE) * 0.4
-    q = torch.randn(T, d, device=DEVICE) * 0.4
-    for ch in (3, 11, 19):                           # outlier channels
-        k[:, ch] *= 14
-        v[:, ch] *= 14
-    print(f"=== Now with realistic outlier channels (ratio {outlier_ratio(k):.0f}) ===")
+# End-to-end attention output (rotate q &amp; k together -&gt; scores preserved).
+ctx_fp = attention(q, k, v)
+ctx_naive = attention(q, quantize(k), quantize(v))
+scores_rot = ((q @ R) @ quantize(k @ R).transpose(-2, -1)) / d ** 0.5
+ctx_rot = (F.softmax(scores_rot, dim=-1) @ quantize(v @ R)) @ R.T
+print(f"attention-output fidelity vs fp (cosine sim, higher is better):")
+print(f"  naive quantization      : {cos_sim(ctx_naive, ctx_fp):.4f}")
+print(f"  rotate-then-quantize     : {cos_sim(ctx_rot, ctx_fp):.4f}\n")
 
-    k_naive, k_rot = quantize(k), quantize(k @ R) @ R.T
-    e_naive, e_rot = rel_error(k_naive, k), rel_error(k_rot, k)
-    print(f"key reconstruction error @ {BITS}-bit:")
-    print(f"  naive quantization      : {e_naive:.3f}")
-    print(f"  rotate-then-quantize     : {e_rot:.3f}   ({e_naive / e_rot:.1f}x lower)\n")
+print(f"=== Memory ===  fp16 = 16 bits/value;  {BITS}-bit -&gt; {16/BITS:.1f}x smaller")
+print("\nThat's TurboQuant in miniature: a cheap rotation spreads the outliers")
+print("so aggressive low-bit KV-cache quantization stays accurate. Real")
+print("TurboQuant adds a fast Hadamard transform + a residual-correction stage")
+print("to reach ~6x compression and ~8x faster attention at scale.")</code></pre></div>
+<div class="term"><div class="top"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="out-lab">Output</span></div><pre>=== Why outliers matter: rotation only helps heavy-tailed data ===
+our tiny model's real keys — outlier ratio (max/mean |k|): 5.1  (near-Gaussian)
+  naive 3-bit error : 0.280
+  rotated 3-bit error: 0.265   (rotation ~neutral — nothing to fix)
 
-    # End-to-end attention output (rotate q &amp; k together -&gt; scores preserved).
-    ctx_fp = attention(q, k, v)
-    ctx_naive = attention(q, quantize(k), quantize(v))
-    scores_rot = ((q @ R) @ quantize(k @ R).transpose(-2, -1)) / d ** 0.5
-    ctx_rot = (F.softmax(scores_rot, dim=-1) @ quantize(v @ R)) @ R.T
-    print(f"attention-output fidelity vs fp (cosine sim, higher is better):")
-    print(f"  naive quantization      : {cos_sim(ctx_naive, ctx_fp):.4f}")
-    print(f"  rotate-then-quantize     : {cos_sim(ctx_rot, ctx_fp):.4f}\n")
+=== Now with realistic outlier channels (ratio 21) ===
+key reconstruction error @ 3-bit:
+  naive quantization      : 0.566
+  rotate-then-quantize     : 0.313   (1.8x lower)
 
-    print(f"=== Memory ===  fp16 = 16 bits/value;  {BITS}-bit -&gt; {16/BITS:.1f}x smaller")
-    print("\nThat's TurboQuant in miniature: a cheap rotation spreads the outliers")
-    print("so aggressive low-bit KV-cache quantization stays accurate. Real")
-    print("TurboQuant adds a fast Hadamard transform + a residual-correction stage")
-    print("to reach ~6x compression and ~8x faster attention at scale.")
-</code></pre>
-  </div>
+attention-output fidelity vs fp (cosine sim, higher is better):
+  naive quantization      : 0.6658
+  rotate-then-quantize     : 0.8502
+
+=== Memory ===  fp16 = 16 bits/value;  3-bit -&gt; 5.3x smaller
+
+That's TurboQuant in miniature: a cheap rotation spreads the outliers
+so aggressive low-bit KV-cache quantization stays accurate. Real
+TurboQuant adds a fast Hadamard transform + a residual-correction stage
+to reach ~6x compression and ~8x faster attention at scale.</pre></div>
   <div class="pager"><a class="prev" href="15_kv_cache.html"><div class="dir">&larr; Previous</div><div class="pt">15 &middot; The KV cache</div></a><span></span></div>
 </div></section>
 

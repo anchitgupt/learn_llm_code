@@ -32,37 +32,8 @@
 <p>The generated names are mostly gibberish, and that's the lesson: looking at only <em>one</em> previous character has no memory of the wider word. Every later step exists to fix this.</p></div>
   <div class="eq">P(next | cur) = count(cur, next) / &Sigma; count(cur, &middot;)<span class="cap">the maximum-likelihood bigram: probabilities are just normalized counts.</span></div><div class="theory"><div class="lab">The theory</div><p>Language modeling is the task of estimating P(next token | previous tokens). A <strong>bigram</strong> model makes the <em>Markov assumption</em> that the next token depends only on the current one. Under that assumption the maximum-likelihood estimate has a closed form: count each pair and normalize each row to a probability distribution.</p><p><strong>Smoothing</strong> (adding 1 to every count, a.k.a. Laplace smoothing) prevents any transition from having probability zero &mdash; otherwise an unseen pair would make the whole sequence impossible and the log-loss infinite. Generation is then just repeated sampling from each conditional distribution. The fatal limit: a context of one token has no memory of the wider word, which is exactly what later steps fix.</p></div>
   <section class="visuals" aria-label="Visual walkthrough"><div class="visual-kicker">Visual walkthrough</div><div class="visual-grid"><figure class="visual-card"><img src="assets/visuals/01-1-pair-stream.webp" alt="Character-like tiles flowing into adjacent pair arrows." loading="lazy" decoding="async"><figcaption><strong>Pair extraction</strong>The model reads adjacent character pairs and asks which symbol tends to come next.</figcaption></figure><figure class="visual-card"><img src="assets/visuals/01-2-count-matrix.webp" alt="Glowing square transition matrix filling with count marks." loading="lazy" decoding="async"><figcaption><strong>Count table</strong>Every current-character row becomes a distribution after counts are normalized.</figcaption></figure><figure class="visual-card"><img src="assets/visuals/01-3-sample-path.webp" alt="Curving sampling path stepping through a matrix of character states." loading="lazy" decoding="async"><figcaption><strong>Sampling path</strong>Generation repeatedly samples from the row for the current character.</figcaption></figure></div></section>
-  <div class="term">
-    <div class="top"><span class="dot g"></span><span class="dot"></span><span class="dot"></span>
-      <span>01_bigram_counts.py</span><span class="out-lab">output</span></div>
-    <pre>Most likely first letters:
-  'a'  9.62%   'm'  7.69%   'e'  7.69%
-
-Generated names:
-  nea
-  po
-  sxormxu
-  tzybzxvkfux</pre>
-  </div>
-  <div class="srch">Full source &middot; <span>01_bigram_counts.py</span></div>
-  <div class="term">
-    <div class="top"><span class="dot g"></span><span class="dot"></span><span class="dot"></span>
-      <span>01_bigram_counts.py</span><span class="out-lab">source</span></div>
-    <pre><code class="language-python">"""
-#1 in the "NN to tiny LLM" ladder.
-
-The simplest possible language model: a BIGRAM model built from pure counts.
-No neural network, no gradients — just "how often does character Y follow
-character X?" We tally that into a table, turn counts into probabilities,
-and sample new words one character at a time.
-
-This is the conceptual seed of every LLM: predict the next token given the
-previous one(s). Everything later just makes this prediction smarter.
-
-Run with:  python bigram_counts.py
-"""
-
-import numpy as np
+  <div class="srch">The notebook &middot; <span>01_bigram_counts.ipynb</span> &mdash; code cells &amp; their output. <a href="https://github.com/anchitgupt/learn_llm_code/blob/main/01_bigram_counts.ipynb">Open &amp; run on GitHub &rarr;</a></div>
+  <div class="term"><div class="top"><span class="dot g"></span><span class="dot"></span><span class="dot"></span><span class="out-lab">In [1]</span></div><pre><code class="language-python">import numpy as np
 
 # A tiny training corpus. Real models use millions of words; we use a handful
 # of names so you can eyeball what's happening. '.' is a special marker for
@@ -111,26 +82,39 @@ def generate(probs, itos, rng, max_len=20):
         if index == 0:              # hit the end marker
             break
         out.append(itos[index])
-    return "".join(out)
+    return "".join(out)</code></pre></div>
+<div class="term"><div class="top"><span class="dot g"></span><span class="dot"></span><span class="dot"></span><span class="out-lab">In [2]</span></div><pre><code class="language-python">counts, stoi, itos = build_counts(WORDS)
+probs = to_probabilities(counts)
 
+# Peek at what it learned: what most often follows the start marker '.'?
+start_row = probs[0]
+top = np.argsort(start_row)[::-1][:5]
+print("Most likely first letters:")
+for i in top:
+    print(f"  '{itos[i]}'  {start_row[i]:.2%}")
 
-if __name__ == "__main__":
-    counts, stoi, itos = build_counts(WORDS)
-    probs = to_probabilities(counts)
+print("\nGenerated names:")
+rng = np.random.default_rng(0)
+for _ in range(10):
+    print("  " + generate(probs, itos, rng))</code></pre></div>
+<div class="term"><div class="top"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="out-lab">Output</span></div><pre>Most likely first letters:
+  'a'  9.62%
+  'm'  7.69%
+  'e'  7.69%
+  'l'  7.69%
+  's'  5.77%
 
-    # Peek at what it learned: what most often follows the start marker '.'?
-    start_row = probs[0]
-    top = np.argsort(start_row)[::-1][:5]
-    print("Most likely first letters:")
-    for i in top:
-        print(f"  '{itos[i]}'  {start_row[i]:.2%}")
-
-    print("\nGenerated names:")
-    rng = np.random.default_rng(0)
-    for _ in range(10):
-        print("  " + generate(probs, itos, rng))
-</code></pre>
-  </div>
+Generated names:
+  nea
+  sxormxu
+  t
+  ocwngk
+  bqqpizzrpqjaqngmvyhm
+  hnhiveoastfwacckuebi
+  ecogrcyhanyjylinzykt
+  llsisqyaqyz
+  tzybzxvkfuxfnjx
+  po</pre></div>
   <div class="pager"><a class="prev" href="00_neural_network.html"><div class="dir">&larr; Previous</div><div class="pt">00 &middot; A neural network</div></a><a class="next" href="02_bigram_nn.html"><div class="dir">Next &rarr;</div><div class="pt">02 &middot; The same model, learned</div></a></div>
 </div></section>
 

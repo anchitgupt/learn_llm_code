@@ -32,45 +32,8 @@
 <p>Run it once, stop, run it again &mdash; it picks up exactly where it left off. That's how real training survives crashes and restarts.</p></div>
   <div class="eq">lr(t): warmup &rarr; cosine decay&emsp;&middot;&emsp;clip &Vert;g&Vert; &le; c&emsp;&middot;&emsp;AdamW: decoupled weight decay<span class="cap">the engineering that lets a run survive hours, crashes, and bad batches.</span></div><div class="theory"><div class="lab">The theory</div><p>Real training needs more than a loop. A <strong>learning-rate schedule</strong> &mdash; a linear <em>warmup</em> followed by <em>cosine decay</em> &mdash; starts small to avoid instability when early gradients are large and poorly conditioned, then anneals to refine the solution. <strong>Gradient clipping</strong> caps the gradient norm so a single pathological batch can't blow the weights to infinity.</p><p><strong>Checkpointing</strong> the model, optimizer state, and step count makes a run <em>resumable</em> &mdash; essential for multi-day training and crash recovery &mdash; while tracking the best validation loss guards against overfitting. <strong>AdamW</strong> decouples weight decay from the gradient update, a small change that consistently improves generalization. These are the unglamorous details that separate a toy loop from a real training run.</p></div>
   <section class="visuals" aria-label="Visual walkthrough"><div class="visual-kicker">Visual walkthrough</div><div class="visual-grid"><figure class="visual-card"><img src="assets/visuals/11-1-training-loop.webp" alt="Closed loop of batches flowing through model, loss, gradients, and update." loading="lazy" decoding="async"><figcaption><strong>Training loop</strong>Batches, loss, gradients, and optimizer updates form the reliable training cycle.</figcaption></figure><figure class="visual-card"><img src="assets/visuals/11-2-lr-and-clipping.webp" alt="Learning-rate curve beside a clipped gradient spike." loading="lazy" decoding="async"><figcaption><strong>Schedule and clipping</strong>Warmup, decay, and gradient clipping prevent unstable updates.</figcaption></figure><figure class="visual-card"><img src="assets/visuals/11-3-checkpoint-resume.webp" alt="Checkpoint storage blocks preserving model and optimizer state." loading="lazy" decoding="async"><figcaption><strong>Checkpointing</strong>Model, optimizer, and step state are saved so training can resume exactly.</figcaption></figure></div></section>
-  <div class="term">
-    <div class="top"><span class="dot g"></span><span class="dot"></span><span class="dot"></span>
-      <span>11_train_loop.py</span><span class="out-lab">output</span></div>
-    <pre>no checkpoint found - starting fresh
-iter    0  lr 3.0e-05  train 4.365
-iter 1500  train 1.599  val 1.757
-
-# next run:
-resumed from train_ckpt.pt at iter 1500</pre>
-  </div>
-  <div class="srch">Full source &middot; <span>11_train_loop.py</span></div>
-  <div class="term">
-    <div class="top"><span class="dot g"></span><span class="dot"></span><span class="dot"></span>
-      <span>11_train_loop.py</span><span class="out-lab">source</span></div>
-    <pre><code class="language-python">"""
-#11 in the "NN to tiny LLM" ladder.
-
-#9 trained with a bare loop. Real training needs a few more things so you can
-run for hours, stop, and pick up where you left off without losing work. This
-script adds the standard production machinery on top of #9's model:
-
-  - RESUMABLE CHECKPOINTS : save model + optimizer + iteration number. Re-run
-                            the script and it CONTINUES instead of restarting.
-                            (Run it a few times to watch the loss keep dropping.)
-  - LR SCHEDULE           : linear WARMUP then COSINE DECAY. Starting slow and
-                            easing off near the end trains more stably than a
-                            flat learning rate.
-  - GRADIENT CLIPPING     : cap the gradient size so one bad batch can't blow
-                            up the weights.
-  - BEST-MODEL TRACKING   : separately save the checkpoint with the lowest
-                            validation loss, not just the latest.
-
-We reuse the TinyGPT model, tokenizer, and batching from #9 — this file is only
-about the TRAINING LOOP, not the architecture.
-
-Run with:  python 11_train_loop.py   (run it again to resume training)
-"""
-
-import importlib.util
+  <div class="srch">The notebook &middot; <span>11_train_loop.ipynb</span> &mdash; code cells &amp; their output. <a href="https://github.com/anchitgupt/learn_llm_code/blob/main/11_train_loop.ipynb">Open &amp; run on GitHub &rarr;</a></div>
+  <div class="term"><div class="top"><span class="dot g"></span><span class="dot"></span><span class="dot"></span><span class="out-lab">In [1]</span></div><pre><code class="language-python">import importlib.util
 import math
 import os
 
@@ -172,13 +135,10 @@ def main():
         torch.save({"model": model.state_dict(), "chars": tg.chars}, BEST_PATH)
     save_checkpoint(model, optimizer, TARGET_ITERS, best_val)
     print(f"\nsaved resumable state -&gt; {CKPT_PATH}")
-    print(f"saved best (val {best_val:.3f})   -&gt; {BEST_PATH}")
-
-
-if __name__ == "__main__":
-    main()
-</code></pre>
-  </div>
+    print(f"saved best (val {best_val:.3f})   -&gt; {BEST_PATH}")</code></pre></div>
+<div class="term"><div class="top"><span class="dot g"></span><span class="dot"></span><span class="dot"></span><span class="out-lab">In [2]</span></div><pre><code class="language-python">main()</code></pre></div>
+<div class="term"><div class="top"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="out-lab">Output</span></div><pre>resumed from train_ckpt.pt at iter 1500 (best val 1.757)
+already trained to 1500 &gt;= target 1500. Increase TARGET_ITERS or delete train_ckpt.pt to train more.</pre></div>
   <div class="pager"><a class="prev" href="10_sampling.html"><div class="dir">&larr; Previous</div><div class="pt">10 &middot; Sampling strategies</div></a><a class="next" href="12_finetune.html"><div class="dir">Next &rarr;</div><div class="pt">12 &middot; Instruction tuning</div></a></div>
 </div></section>
 

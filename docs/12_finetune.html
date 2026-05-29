@@ -32,56 +32,8 @@
 <p>Same weights, one nudge &mdash; but now it follows commands instead of rambling. Ask the base model to 'say hello' and it quotes Shakespeare; the tuned model replies politely.</p></div>
   <div class="eq">maximize  P(response | instruction)&emsp;&middot;&emsp;loss on response tokens only (mask the prompt)<span class="cap">supervised fine-tuning turns a text-continuer into an instruction-follower.</span></div><div class="theory"><div class="lab">The theory</div><p>A pretrained <strong>base model</strong> models P(text) &mdash; it <em>continues</em> whatever you give it, it doesn't obey. <strong>Supervised fine-tuning (SFT)</strong> keeps training that same model on curated (instruction, response) pairs wrapped in a fixed template, teaching the conditional distribution P(response | instruction). It's still ordinary next-token cross-entropy &mdash; only the data has changed.</p><p>The crucial trick is <strong>loss masking</strong>: gradients are computed only on the <em>response</em> tokens (the prompt's labels are ignored), so the model learns to <em>answer</em> a question rather than to generate more questions. This single step &mdash; one nudge on top of a base model &mdash; is what turned GPT-3 into InstructGPT and, ultimately, ChatGPT.</p></div>
   <section class="visuals" aria-label="Visual walkthrough"><div class="visual-kicker">Visual walkthrough</div><div class="visual-grid"><figure class="visual-card"><img src="assets/visuals/12-1-instruction-pairs.webp" alt="Prompt and response cards flowing into a base language model." loading="lazy" decoding="async"><figcaption><strong>Instruction pairs</strong>Supervised examples show the model how an instruction should be answered.</figcaption></figure><figure class="visual-card"><img src="assets/visuals/12-2-loss-mask.webp" alt="Prompt side masked while answer side sends training signal backward." loading="lazy" decoding="async"><figcaption><strong>Loss mask</strong>Only response tokens send loss backward; prompt tokens are context.</figcaption></figure><figure class="visual-card"><img src="assets/visuals/12-3-assistant-path.webp" alt="Helpful response path glowing brighter than open-ended continuation paths." loading="lazy" decoding="async"><figcaption><strong>Assistant behavior</strong>The tuned model follows the requested answer path instead of simply continuing text.</figcaption></figure></div></section>
-  <div class="term">
-    <div class="top"><span class="dot g"></span><span class="dot"></span><span class="dot"></span>
-      <span>12_finetune.py</span><span class="out-lab">output</span></div>
-    <pre>BASE model, ask 'say hello':
-  -&gt; 'I will not the world and the words,'
-
-FINE-TUNED model:
-  Q: say hello
-  A: good morrow to you, friend.
-  Q: what is love
-  A: love is a gentle madness.</pre>
-  </div>
-  <div class="srch">Full source &middot; <span>12_finetune.py</span></div>
-  <div class="term">
-    <div class="top"><span class="dot g"></span><span class="dot"></span><span class="dot"></span>
-      <span>12_finetune.py</span><span class="out-lab">source</span></div>
-    <pre><code class="language-python">"""
-#12 in the "NN to tiny LLM" ladder.  *** THE FINALE: base model -&gt; assistant ***
-
-Everything so far produces a BASE model: give it text, it continues the text.
-That's autocomplete, not an assistant. The step that turned GPT-3 into ChatGPT
-is INSTRUCTION FINE-TUNING: keep training the base model on (instruction,
-response) pairs so it learns to RESPOND rather than ramble.
-
-Three ideas make it work, all visible below:
-
-  1. A PROMPT TEMPLATE — wrap every example in a fixed format so the model
-     learns where the question ends and the answer begins:
-         QUESTION: &lt;instruction&gt;
-         ANSWER:   &lt;response&gt;
-
-  2. LOSS MASKING — we only compute loss on the ANSWER tokens (the prompt
-     tokens are set to ignore_index=-100). The model shouldn't be trained to
-     generate the question; only to produce a good answer to it. This is the
-     single most important trick in instruction tuning.
-
-  3. START FROM THE BASE MODEL — we load tiny_gpt.pt (transfer learning) and
-     nudge it, rather than training from scratch. It already knows how letters
-     and words work; we only teach it the new BEHAVIOUR of answering.
-
-HONEST CAVEAT: our base model is tiny (465K params) and trained only on
-Shakespeare, and we use a handful of examples — so this MEMORISES the format
-and answers rather than generalising. That's fine: the goal is to SEE the
-mechanism. Real instruction tuning is this exact code, with a big base model
-and thousands of diverse examples.
-
-Run with:  python 12_finetune.py   (requires tiny_gpt.pt from running #9 first)
-"""
-
-import importlib.util
+  <div class="srch">The notebook &middot; <span>12_finetune.ipynb</span> &mdash; code cells &amp; their output. <a href="https://github.com/anchitgupt/learn_llm_code/blob/main/12_finetune.ipynb">Open &amp; run on GitHub &rarr;</a></div>
+  <div class="term"><div class="top"><span class="dot g"></span><span class="dot"></span><span class="dot"></span><span class="out-lab">In [1]</span></div><pre><code class="language-python">import importlib.util
 import os
 
 import torch
@@ -187,33 +139,66 @@ def load_or_finetune():
         return model
     if not os.path.exists(tg.CKPT_PATH):
         raise SystemExit("No tiny_gpt.pt — run `python 09_tiny_gpt.py` first.")
-    return finetune()
+    return finetune()</code></pre></div>
+<div class="term"><div class="top"><span class="dot g"></span><span class="dot"></span><span class="dot"></span><span class="out-lab">In [2]</span></div><pre><code class="language-python">model = load_or_finetune()
+model.eval()
 
+print("=" * 60)
+print("BASE model (tiny_gpt.pt) answering — it ignores instructions:")
+print("=" * 60)
+base = tg.TinyGPT().to(DEVICE)
+base.load_state_dict(torch.load(tg.CKPT_PATH, map_location=DEVICE)["model"])
+base.eval()
+print(f"  ask: 'say hello'\n  -&gt;{answer(base, 'say hello')!r}\n")
 
-if __name__ == "__main__":
-    model = load_or_finetune()
-    model.eval()
+print("=" * 60)
+print("FINE-TUNED model answering the SAME template — now it responds:")
+print("=" * 60)
+for instruction, _ in PAIRS:
+    print(f"  Q: {instruction}")
+    print(f"  A:{answer(model, instruction)}\n")
 
-    print("=" * 60)
-    print("BASE model (tiny_gpt.pt) answering — it ignores instructions:")
-    print("=" * 60)
-    base = tg.TinyGPT().to(DEVICE)
-    base.load_state_dict(torch.load(tg.CKPT_PATH, map_location=DEVICE)["model"])
-    base.eval()
-    print(f"  ask: 'say hello'\n  -&gt;{answer(base, 'say hello')!r}\n")
+print("Same architecture, same weights+a nudge — but masking the loss onto")
+print("the answers taught it to FOLLOW INSTRUCTIONS. That nudge, at scale,")
+print("is the difference between GPT-3 and ChatGPT.")</code></pre></div>
+<div class="term"><div class="top"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="out-lab">Output</span></div><pre>loaded fine-tuned model from tiny_gpt_chat.pt (delete it to re-finetune)
 
-    print("=" * 60)
-    print("FINE-TUNED model answering the SAME template — now it responds:")
-    print("=" * 60)
-    for instruction, _ in PAIRS:
-        print(f"  Q: {instruction}")
-        print(f"  A:{answer(model, instruction)}\n")
+============================================================
+BASE model (tiny_gpt.pt) answering — it ignores instructions:
+============================================================
+  ask: 'say hello'
+  -&gt;'I will not the world and the words,'
 
-    print("Same architecture, same weights+a nudge — but masking the loss onto")
-    print("the answers taught it to FOLLOW INSTRUCTIONS. That nudge, at scale,")
-    print("is the difference between GPT-3 and ChatGPT.")
-</code></pre>
-  </div>
+============================================================
+FINE-TUNED model answering the SAME template — now it responds:
+============================================================
+  Q: say hello
+  A:good morrow to you, friend.
+
+  Q: who are you
+  A:i am your humble servant.
+
+  Q: how are you
+  A:i am well, i thank you.
+
+  Q: say farewell
+  A:farewell, and good night.
+
+  Q: praise the king
+  A:long live the noble king.
+
+  Q: are you happy
+  A:yes, my heart is glad.
+
+  Q: what is love
+  A:love is a gentle madness.
+
+  Q: good night
+  A:sleep well, sweet friend.
+
+Same architecture, same weights+a nudge — but masking the loss onto
+the answers taught it to FOLLOW INSTRUCTIONS. That nudge, at scale,
+is the difference between GPT-3 and ChatGPT.</pre></div>
   <div class="pager"><a class="prev" href="11_train_loop.html"><div class="dir">&larr; Previous</div><div class="pt">11 &middot; Production training</div></a><a class="next" href="13_dpo.html"><div class="dir">Next &rarr;</div><div class="pt">13 &middot; Preference tuning with DPO</div></a></div>
 </div></section>
 

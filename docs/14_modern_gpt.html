@@ -32,54 +32,8 @@
 <p>Same training data and loop as #09 &mdash; but it reaches a <strong>better validation loss (1.634 vs 1.674) with fewer parameters (418K vs 465K)</strong>. That efficiency is why the whole field switched. This is, in miniature, a 2026 model.</p></div>
   <div class="eq">RoPE: rotate(q,k) by m&theta;&emsp;&middot;&emsp;RMSNorm(x)=x&middot;g/&radic;(mean&nbsp;x&sup2;+&epsilon;)&emsp;&middot;&emsp;SwiGLU=(SiLU(xW&#8321;)&odot;xW&#8323;)W&#8322;<span class="cap">the four upgrades behind Llama / Mistral / Qwen / DeepSeek.</span></div><div class="theory"><div class="lab">The theory</div><p>Four refinements separate a 2017 transformer from a 2026 one. <strong>RoPE</strong> encodes position by <em>rotating</em> the query and key vectors by an angle proportional to their position; because a rotation's dot product depends only on the <em>relative</em> offset, the model generalizes to longer contexts and needs no learned position table. <strong>RMSNorm</strong> drops LayerNorm's mean-subtraction and bias, normalizing by the root-mean-square alone &mdash; cheaper, equally stable.</p><p><strong>SwiGLU</strong> replaces the ReLU feed-forward with a <em>gated</em> unit: one branch decides &lsquo;how much&rsquo; and multiplies the other, giving more expressive power per parameter. <strong>GQA</strong> (grouped-query attention) lets several query heads share one set of key/value heads, interpolating between full multi-head (best quality) and multi-query (smallest cache). Together they reach a lower loss with <em>fewer</em> parameters &mdash; which is exactly why the whole field adopted them.</p></div>
   <section class="visuals" aria-label="Visual walkthrough"><div class="visual-kicker">Visual walkthrough</div><div class="visual-grid"><figure class="visual-card"><img src="assets/visuals/14-1-rope-rotation.webp" alt="Query and key vectors rotating around circular position geometry." loading="lazy" decoding="async"><figcaption><strong>RoPE</strong>Rotary position geometry makes attention depend on relative offsets.</figcaption></figure><figure class="visual-card"><img src="assets/visuals/14-2-norm-swiglu.webp" alt="Normalized residual stream passing through a glowing gated feed-forward unit." loading="lazy" decoding="async"><figcaption><strong>RMSNorm and SwiGLU</strong>Normalization stabilizes the stream while gated feed-forwards add efficient capacity.</figcaption></figure><figure class="visual-card"><img src="assets/visuals/14-3-gqa-sharing.webp" alt="Grouped query heads sharing a smaller set of key and value heads." loading="lazy" decoding="async"><figcaption><strong>GQA</strong>Several query heads share fewer key/value heads, shrinking the inference cache.</figcaption></figure></div></section>
-  <div class="term">
-    <div class="top"><span class="dot g"></span><span class="dot"></span><span class="dot"></span>
-      <span>14_modern_gpt.py</span><span class="out-lab">output</span></div>
-    <pre>device: cpu | parameters: 418,848
-RoPE + RMSNorm + SwiGLU + GQA (4 query heads share 2 kv heads)
-iter 2000  train 1.399  val 1.634   &lt;- beats #09 with fewer params
-
-=== Generated Shakespeare (modern architecture) ===
-JULIET:
-At, grones for your royalty, making, I'</pre>
-  </div>
-  <div class="srch">Full source &middot; <span>14_modern_gpt.py</span></div>
-  <div class="term">
-    <div class="top"><span class="dot g"></span><span class="dot"></span><span class="dot"></span>
-      <span>14_modern_gpt.py</span><span class="out-lab">source</span></div>
-    <pre><code class="language-python">"""
-#14 in the "NN to tiny LLM" ladder.  (the 2026 architecture)
-
-Our #9 GPT is the classic 2017 Transformer. Frontier open models (Llama,
-Mistral, Qwen, DeepSeek, Gemma...) have since converged on four upgrades that
-are now standard. This file rebuilds the GPT with all four — the SAME training
-loop and data as #9, so you can compare directly.
-
-  1. RoPE  (Rotary Position Embeddings)
-     #9 added a LEARNED vector per absolute position. RoPE instead ROTATES the
-     query/key vectors by an angle proportional to their position. Relative
-     distances fall out naturally and it extrapolates to longer contexts.
-     -&gt; we delete the position-embedding table entirely.
-
-  2. RMSNorm  (instead of LayerNorm)
-     Normalise by the root-mean-square only (no mean-subtraction, no bias).
-     Fewer operations, same stability. Used by basically every modern LLM.
-
-  3. SwiGLU  (instead of the ReLU MLP)
-     A gated feed-forward: one branch decides "how much", another "what". It
-     consistently beats a plain ReLU MLP at the same parameter budget.
-
-  4. GQA  (Grouped-Query Attention, instead of full multi-head)
-     Many query heads SHARE a smaller number of key/value heads. Far less
-     memory for the KV cache at inference, with almost no quality loss — the
-     reason long-context models are affordable to serve.
-
-Reuses the tokenizer, data, and training utilities from #9.
-
-Run with:  python 14_modern_gpt.py   (run again to load instantly)
-"""
-
-import importlib.util
+  <div class="srch">The notebook &middot; <span>14_modern_gpt.ipynb</span> &mdash; code cells &amp; their output. <a href="https://github.com/anchitgupt/learn_llm_code/blob/main/14_modern_gpt.ipynb">Open &amp; run on GitHub &rarr;</a></div>
+  <div class="term"><div class="top"><span class="dot g"></span><span class="dot"></span><span class="dot"></span><span class="out-lab">In [1]</span></div><pre><code class="language-python">import importlib.util
 import os
 
 import torch
@@ -239,39 +193,59 @@ class ModernGPT(nn.Module):
             logits, _ = self(idx[:, -BLOCK_SIZE:])
             probs = F.softmax(logits[:, -1, :], dim=-1)
             idx = torch.cat([idx, torch.multinomial(probs, 1)], dim=1)
-        return idx
+        return idx</code></pre></div>
+<div class="term"><div class="top"><span class="dot g"></span><span class="dot"></span><span class="dot"></span><span class="out-lab">In [2]</span></div><pre><code class="language-python">model = ModernGPT().to(DEVICE)
+n_params = sum(p.numel() for p in model.parameters())
+print(f"device: {DEVICE} | parameters: {n_params:,}")
+print(f"RoPE + RMSNorm + SwiGLU + GQA "
+      f"({N_HEAD} query heads share {N_KV_HEAD} kv heads)\n")
+
+if os.path.exists(CKPT_PATH):
+    model.load_state_dict(torch.load(CKPT_PATH, map_location=DEVICE)["model"])
+    print(f"loaded {CKPT_PATH} (delete it to retrain)\n")
+else:
+    optimizer = torch.optim.AdamW(model.parameters(), lr=LEARNING_RATE)
+    for it in range(MAX_ITERS + 1):
+        if it % EVAL_INTERVAL == 0:
+            losses = tg.estimate_loss(model)
+            print(f"iter {it:4d}  train {losses['train']:.3f}  "
+                  f"val {losses['val']:.3f}")
+        x, y = tg.get_batch(tg.train_data)
+        _, loss = model(x, y)
+        optimizer.zero_grad(set_to_none=True)
+        loss.backward()
+        optimizer.step()
+    torch.save({"model": model.state_dict(), "chars": tg.chars}, CKPT_PATH)
+    print(f"\nsaved -&gt; {CKPT_PATH}")
+
+print("\n=== Generated Shakespeare (modern architecture) ===\n")
+start = torch.zeros((1, 1), dtype=torch.long, device=DEVICE)
+print(tg.decode(model.generate(start, max_new_tokens=500)[0].tolist()))</code></pre></div>
+<div class="term"><div class="top"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="out-lab">Output</span></div><pre>device: cpu | parameters: 418,848
+RoPE + RMSNorm + SwiGLU + GQA (4 query heads share 2 kv heads)
+
+loaded modern_gpt.pt (delete it to retrain)
 
 
-if __name__ == "__main__":
-    model = ModernGPT().to(DEVICE)
-    n_params = sum(p.numel() for p in model.parameters())
-    print(f"device: {DEVICE} | parameters: {n_params:,}")
-    print(f"RoPE + RMSNorm + SwiGLU + GQA "
-          f"({N_HEAD} query heads share {N_KV_HEAD} kv heads)\n")
+=== Generated Shakespeare (modern architecture) ===
 
-    if os.path.exists(CKPT_PATH):
-        model.load_state_dict(torch.load(CKPT_PATH, map_location=DEVICE)["model"])
-        print(f"loaded {CKPT_PATH} (delete it to retrain)\n")
-    else:
-        optimizer = torch.optim.AdamW(model.parameters(), lr=LEARNING_RATE)
-        for it in range(MAX_ITERS + 1):
-            if it % EVAL_INTERVAL == 0:
-                losses = tg.estimate_loss(model)
-                print(f"iter {it:4d}  train {losses['train']:.3f}  "
-                      f"val {losses['val']:.3f}")
-            x, y = tg.get_batch(tg.train_data)
-            _, loss = model(x, y)
-            optimizer.zero_grad(set_to_none=True)
-            loss.backward()
-            optimizer.step()
-        torch.save({"model": model.state_dict(), "chars": tg.chars}, CKPT_PATH)
-        print(f"\nsaved -&gt; {CKPT_PATH}")
 
-    print("\n=== Generated Shakespeare (modern architecture) ===\n")
-    start = torch.zeros((1, 1), dtype=torch.long, device=DEVICE)
-    print(tg.decode(model.generate(start, max_new_tokens=500)[0].tolist()))
-</code></pre>
-  </div>
+
+Nursed Camillo? leave moin woman that armed.
+
+ANORD:
+Do you keep'd is by; but so, what lieve's will,
+To benrise to crosp; t$o defend the lands with cruest
+With sacredam and unsave, and be these princess,
+But by spark'd wrance. O. pray the put,
+And think of my cope thee become you wrange;
+And my knee base full of nursed dog now.
+Your else thou shalt Angelo speak.'
+
+KING RICHARD II:
+Raster leave you forth, my grows for me
+Faymild from themselves, calt in the cosh thou,
+To rators of you to kindly</pre></div>
   <div class="pager"><a class="prev" href="13_dpo.html"><div class="dir">&larr; Previous</div><div class="pt">13 &middot; Preference tuning with DPO</div></a><a class="next" href="15_kv_cache.html"><div class="dir">Next &rarr;</div><div class="pt">15 &middot; The KV cache</div></a></div>
 </div></section>
 
