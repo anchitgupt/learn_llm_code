@@ -3,6 +3,10 @@ __pycache__/
 *.pyc
 .venv/
 
+# Local agent/worktree artifacts
+.superpowers/
+.worktrees/
+
 # Trained model checkpoints (regenerate by running the scripts)
 *.pt
 
