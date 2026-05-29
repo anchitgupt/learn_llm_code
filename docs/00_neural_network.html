@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>00 &middot; A neural network &mdash; Build an LLM from Scratch</title>
 <meta name="description" content="forward pass + backprop, learning XOR">
+<link rel="icon" href="data:,">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&display=swap" rel="stylesheet">
@@ -23,13 +24,14 @@
     <div><h1>A neural network</h1><div class="tag">forward pass + backprop, learning XOR</div></div>
   </div>
   <span class="file">00_neural_network.py</span>
+  <a class="nb-btn" href="https://github.com/anchitgupt/learn_llm_code/blob/main/00_neural_network.ipynb">&#9658; Open as notebook (with output)</a>
 </div></section>
 
 <section class="section"><div class="wrap stepwrap">
   <div class="lead"><p>Every LLM is, at bottom, a neural network trained by gradient descent. So we start at the true atom: a two-layer net that learns <strong>XOR</strong> &mdash; the classic problem a single linear layer <em>cannot</em> solve.</p>
 <p>It contains the three ideas that never leave: a <strong>forward pass</strong> (predict), a <strong>loss</strong> (measure wrongness), and <strong>backpropagation</strong> (nudge every weight downhill). Written in pure NumPy so nothing hides.</p></div>
   <div class="eq">a = &sigma;(W&middot;x + b)&emsp;&middot;&emsp;&sigma;&prime;(z) = &sigma;(z)(1 &minus; &sigma;(z))&emsp;&middot;&emsp;w &larr; w &minus; &eta;&nbsp;&part;L/&part;w<span class="cap">a neuron: weighted sum &rarr; nonlinearity; trained by gradient descent on the loss.</span></div><div class="theory"><div class="lab">The theory</div><p>A neuron computes a weighted sum of its inputs and passes it through a nonlinear <em>activation</em>. Stacking a hidden layer of these between input and output makes the network a <strong>universal function approximator</strong> &mdash; with enough hidden units it can represent any continuous function. The nonlinearity is essential: without it, stacked linear layers collapse into a single linear map.</p><p>Learning means minimizing a <strong>loss</strong> (here, mean-squared error) by gradient descent. <strong>Backpropagation</strong> is just the chain rule applied in reverse: compute how the loss depends on each weight, layer by layer from output back to input, then nudge every weight a small step <em>against</em> its gradient. XOR is the canonical test because it is <em>not linearly separable</em> &mdash; a single layer cannot solve it, but a hidden layer learns the intermediate features that can.</p></div>
-  <img src="assets/visuals/triptychs/00.svg" alt="Diagram for 00" style="width:100%; margin: 32px 0; border-radius: 8px; border: 1px solid var(--line); background: var(--panel);" />
+  <section class="visuals" aria-label="Visual walkthrough"><div class="visual-kicker">Visual walkthrough</div><div class="visual-grid"><figure class="visual-card"><img src="assets/visuals/00-1-xor-corners.webp" alt="Four glowing XOR corner points with crossed class structure." loading="lazy" decoding="async"><figcaption><strong>XOR corners</strong>The matching labels sit on opposite corners, so one straight split cannot solve the task.</figcaption></figure><figure class="visual-card"><img src="assets/visuals/00-2-hidden-features.webp" alt="Small neural network bending input signals through a hidden layer." loading="lazy" decoding="async"><figcaption><strong>Hidden features</strong>A hidden layer bends the input space into features a final neuron can separate.</figcaption></figure><figure class="visual-card"><img src="assets/visuals/00-3-output-prediction.webp" alt="Output neuron receiving weighted hidden signals and resolving binary predictions." loading="lazy" decoding="async"><figcaption><strong>Output prediction</strong>Forward pass, loss, and backprop nudge the weights until the XOR outputs are correct.</figcaption></figure></div></section>
   <div class="term">
     <div class="top"><span class="dot g"></span><span class="dot"></span><span class="dot"></span>
       <span>00_neural_network.py</span><span class="out-lab">output</span></div>

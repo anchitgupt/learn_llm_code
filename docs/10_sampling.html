@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>10 &middot; Sampling strategies &mdash; Build an LLM from Scratch</title>
 <meta name="description" content="temperature, top-k, top-p — one model, many writers">
+<link rel="icon" href="data:,">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&display=swap" rel="stylesheet">
@@ -23,13 +24,14 @@
     <div><h1>Sampling strategies</h1><div class="tag">temperature, top-k, top-p — one model, many writers</div></div>
   </div>
   <span class="file">10_sampling.py</span>
+  <a class="nb-btn" href="https://github.com/anchitgupt/learn_llm_code/blob/main/10_sampling.ipynb">&#9658; Open as notebook (with output)</a>
 </div></section>
 
 <section class="section"><div class="wrap stepwrap">
   <div class="lead"><p>A trained model outputs a probability for every next token; <em>how</em> you pick from them transforms the text without touching a single weight. <strong>Greedy</strong> loops forever; <strong>temperature</strong> trades safety for creativity; <strong>top-k</strong> and <strong>top-p</strong> hit the sweet spot.</p>
 <p>This is exactly the <code>temperature</code> / <code>top_p</code> knob you set when calling an LLM API. The model is frozen &mdash; you're reshaping how it samples from itself.</p></div>
   <div class="eq">p &prop; exp(logits / T)&emsp;&middot;&emsp;top-k: keep k highest&emsp;&middot;&emsp;top-p: smallest set with &Sigma;p &ge; p<span class="cap">decoding shapes the model's own distribution; the weights never change.</span></div><div class="theory"><div class="lab">The theory</div><p>Once trained, the model gives a distribution over the next token; <strong>decoding</strong> decides how to pick from it. Greedy (argmax) maximizes each local step but produces repetitive, globally sub-optimal text, and beam search &mdash; great for translation &mdash; degenerates for open-ended generation. So we sample, but shape the distribution first.</p><p><strong>Temperature</strong> T divides the logits before softmax: T&nbsp;&lt;&nbsp;1 sharpens toward the top choices (safer, more repetitive), T&nbsp;&gt;&nbsp;1 flattens them (wilder, more diverse), and T&rarr;0 recovers greedy. <strong>Truncation</strong> then trims the unreliable tail &mdash; <em>top-k</em> keeps the k most likely tokens, <em>top-p</em> (nucleus) keeps the smallest set whose probability mass exceeds p, adapting how many options it considers to how confident the model is. None of this touches the weights; it's purely how you read the same model.</p></div>
-  <img src="assets/visuals/triptychs/10.svg" alt="Diagram for 10" style="width:100%; margin: 32px 0; border-radius: 8px; border: 1px solid var(--line); background: var(--panel);" />
+  <section class="visuals" aria-label="Visual walkthrough"><div class="visual-kicker">Visual walkthrough</div><div class="visual-grid"><figure class="visual-card"><img src="assets/visuals/10-1-greedy-loop.webp" alt="Tallest probability bar looping back into repeated token choices." loading="lazy" decoding="async"><figcaption><strong>Greedy loop</strong>Always taking the top token is locally safe but can fall into repetition.</figcaption></figure><figure class="visual-card"><img src="assets/visuals/10-2-temperature-shape.webp" alt="Probability bars reshaped from sharp to broad by heated particle flow." loading="lazy" decoding="async"><figcaption><strong>Temperature</strong>Temperature sharpens or flattens the distribution before sampling.</figcaption></figure><figure class="visual-card"><img src="assets/visuals/10-3-topk-topp-filter.webp" alt="Probability distribution with tail candidates filtered behind a cutoff gate." loading="lazy" decoding="async"><figcaption><strong>Top-k and top-p</strong>Truncation removes the unreliable tail while keeping enough variety.</figcaption></figure></div></section>
   <div class="term">
     <div class="top"><span class="dot g"></span><span class="dot"></span><span class="dot"></span>
       <span>10_sampling.py</span><span class="out-lab">output</span></div>

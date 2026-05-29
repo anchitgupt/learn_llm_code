@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>07 &middot; Self-attention &mdash; Build an LLM from Scratch</title>
 <meta name="description" content="the mechanism that makes transformers work">
+<link rel="icon" href="data:,">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&display=swap" rel="stylesheet">
@@ -23,13 +24,14 @@
     <div><h1>Self-attention</h1><div class="tag">the mechanism that makes transformers work</div></div>
   </div>
   <span class="file">07_self_attention.py</span>
+  <a class="nb-btn" href="https://github.com/anchitgupt/learn_llm_code/blob/main/07_self_attention.ipynb">&#9658; Open as notebook (with output)</a>
 </div></section>
 
 <section class="section"><div class="wrap stepwrap">
   <div class="lead"><p>The heart of it all. Each token emits a <strong>Query</strong> (what I seek), a <strong>Key</strong> (what I offer), and a <strong>Value</strong> (what I pass on). Dot-product Query&middot;Key gives relevance scores &rarr; softmax &rarr; a weighted sum of Values. Every token gets a new, <em>context-aware</em> representation.</p>
 <p>The <strong>causal mask</strong> (the lower triangle below) forbids peeking at the future. Unlike the MLP's fixed window, attention scales to any context and <em>learns</em> what to focus on.</p></div>
   <div class="eq">Attention(Q, K, V) = softmax( QK&#7488; / &radic;d&#8342; + mask )&middot;V<span class="cap">content-based weighted average; scaling by &radic;d&#8342; keeps the softmax gradients stable.</span></div><div class="theory"><div class="lab">The theory</div><p>Attention is a <strong>content-based weighted average</strong>. Each token produces a <em>query</em> (what it's looking for), a <em>key</em> (what it offers), and a <em>value</em> (what it passes on). The dot product of a query with every key gives relevance scores; softmax turns those into weights that sum to one; the output is the weighted sum of values. Scaling scores by &radic;d&#8342; keeps them from growing with dimension, which would otherwise saturate the softmax and kill its gradient.</p><p>Two properties make it powerful. It has a <strong>global receptive field</strong> &mdash; any token can attend to any earlier token in a single step, unlike the fixed window of an MLP or the slow recurrence of an RNN. And it is <em>permutation-equivariant</em> (it sees a set, not a sequence), which is precisely why transformers must add positional information separately. The <strong>causal mask</strong> sets future scores to &minus;&infin; so a token can never attend to what it's trying to predict.</p></div>
-  <img src="assets/visuals/triptychs/07.svg" alt="Diagram for 07" style="width:100%; margin: 32px 0; border-radius: 8px; border: 1px solid var(--line); background: var(--panel);" />
+  <section class="visuals" aria-label="Visual walkthrough"><div class="visual-kicker">Visual walkthrough</div><div class="visual-grid"><figure class="visual-card"><img src="assets/visuals/07-1-qkv-streams.webp" alt="Token columns emitting query, key, and value streams." loading="lazy" decoding="async"><figcaption><strong>Q, K, V streams</strong>Each token emits what it seeks, what it offers, and what it will pass on.</figcaption></figure><figure class="visual-card"><img src="assets/visuals/07-2-causal-mask.webp" alt="Lower-triangular attention matrix with future positions blocked." loading="lazy" decoding="async"><figcaption><strong>Causal mask</strong>The lower triangle lets each token attend only to itself and the past.</figcaption></figure><figure class="visual-card"><img src="assets/visuals/07-3-weighted-values.webp" alt="Weighted value vectors merging into updated token representations." loading="lazy" decoding="async"><figcaption><strong>Weighted values</strong>Attention weights mix value vectors into context-aware token representations.</figcaption></figure></div></section>
   <div class="term">
     <div class="top"><span class="dot g"></span><span class="dot"></span><span class="dot"></span>
       <span>07_self_attention.py</span><span class="out-lab">output</span></div>

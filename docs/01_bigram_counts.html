@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>01 &middot; The simplest language model &mdash; Build an LLM from Scratch</title>
 <meta name="description" content="predict the next character by counting">
+<link rel="icon" href="data:,">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&display=swap" rel="stylesheet">
@@ -23,13 +24,14 @@
     <div><h1>The simplest language model</h1><div class="tag">predict the next character by counting</div></div>
   </div>
   <span class="file">01_bigram_counts.py</span>
+  <a class="nb-btn" href="https://github.com/anchitgupt/learn_llm_code/blob/main/01_bigram_counts.ipynb">&#9658; Open as notebook (with output)</a>
 </div></section>
 
 <section class="section"><div class="wrap stepwrap">
   <div class="lead"><p>A language model answers one question: <em>given what came before, what comes next?</em> The simplest possible version doesn't even use a network &mdash; it just <strong>counts</strong> which character tends to follow which, then samples from those frequencies.</p>
 <p>The generated names are mostly gibberish, and that's the lesson: looking at only <em>one</em> previous character has no memory of the wider word. Every later step exists to fix this.</p></div>
   <div class="eq">P(next | cur) = count(cur, next) / &Sigma; count(cur, &middot;)<span class="cap">the maximum-likelihood bigram: probabilities are just normalized counts.</span></div><div class="theory"><div class="lab">The theory</div><p>Language modeling is the task of estimating P(next token | previous tokens). A <strong>bigram</strong> model makes the <em>Markov assumption</em> that the next token depends only on the current one. Under that assumption the maximum-likelihood estimate has a closed form: count each pair and normalize each row to a probability distribution.</p><p><strong>Smoothing</strong> (adding 1 to every count, a.k.a. Laplace smoothing) prevents any transition from having probability zero &mdash; otherwise an unseen pair would make the whole sequence impossible and the log-loss infinite. Generation is then just repeated sampling from each conditional distribution. The fatal limit: a context of one token has no memory of the wider word, which is exactly what later steps fix.</p></div>
-  <img src="assets/visuals/triptychs/01.svg" alt="Diagram for 01" style="width:100%; margin: 32px 0; border-radius: 8px; border: 1px solid var(--line); background: var(--panel);" />
+  <section class="visuals" aria-label="Visual walkthrough"><div class="visual-kicker">Visual walkthrough</div><div class="visual-grid"><figure class="visual-card"><img src="assets/visuals/01-1-pair-stream.webp" alt="Character-like tiles flowing into adjacent pair arrows." loading="lazy" decoding="async"><figcaption><strong>Pair extraction</strong>The model reads adjacent character pairs and asks which symbol tends to come next.</figcaption></figure><figure class="visual-card"><img src="assets/visuals/01-2-count-matrix.webp" alt="Glowing square transition matrix filling with count marks." loading="lazy" decoding="async"><figcaption><strong>Count table</strong>Every current-character row becomes a distribution after counts are normalized.</figcaption></figure><figure class="visual-card"><img src="assets/visuals/01-3-sample-path.webp" alt="Curving sampling path stepping through a matrix of character states." loading="lazy" decoding="async"><figcaption><strong>Sampling path</strong>Generation repeatedly samples from the row for the current character.</figcaption></figure></div></section>
   <div class="term">
     <div class="top"><span class="dot g"></span><span class="dot"></span><span class="dot"></span>
       <span>01_bigram_counts.py</span><span class="out-lab">output</span></div>

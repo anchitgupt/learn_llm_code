@@ -16,6 +16,11 @@ more compute.
 > (idea, key formula, theory, real terminal output, full source). Live at
 > **<https://anchitgupt.github.io/learn_llm_code/>**. See
 > [Deploy to GitHub Pages](#deploy-to-github-pages) below.
+>
+> 📓 **Prefer notebooks?** Every script also has an **executed Jupyter notebook**
+> (`NN_name.ipynb`) in the repo root — open it in Jupyter or VS Code to run it
+> cell-by-cell, or just view it on GitHub (the outputs render inline). Regenerate
+> them all with `python build_notebooks.py`.
 
 ---
 

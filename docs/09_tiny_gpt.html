@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>09 &middot; A real GPT &mdash; Build an LLM from Scratch</title>
 <meta name="description" content="trained on Shakespeare — it generates text">
+<link rel="icon" href="data:,">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&display=swap" rel="stylesheet">
@@ -23,13 +24,14 @@
     <div><h1>A real GPT</h1><div class="tag">trained on Shakespeare — it generates text</div></div>
   </div>
   <span class="file">09_tiny_gpt.py</span>
+  <a class="nb-btn" href="https://github.com/anchitgupt/learn_llm_code/blob/main/09_tiny_gpt.ipynb">&#9658; Open as notebook (with output)</a>
 </div></section>
 
 <section class="section"><div class="wrap stepwrap">
   <div class="lead"><p>Everything converges. Token + <strong>position embeddings</strong> &rarr; a stack of blocks &rarr; an output head, trained on ~1MB of Shakespeare. From a 4.36 loss of pure noise, it learns &mdash; entirely on its own &mdash; the play format, character names, line breaks, and Shakespearean cadence.</p>
 <p>This is a genuine, complete GPT (465K params). The architecture is identical to GPT-4; only the scale differs. The trained weights are saved to <code>tiny_gpt.pt</code> so every later step loads instantly.</p></div>
   <div class="eq">h = blocks( E_tok[x] + E_pos )&emsp;&middot;&emsp;logits = h&middot;W&#7488;&emsp;&middot;&emsp;L = &minus;&Sigma; log p(next | context)<span class="cap">decoder-only GPT: token + position embeddings, N causal blocks, next-token cross-entropy.</span></div><div class="theory"><div class="lab">The theory</div><p>A GPT is a <strong>decoder-only transformer</strong>. Tokens become embeddings; because attention is order-blind, a learned <strong>positional embedding</strong> is added so the model knows <em>where</em> each token sits. The sum flows through N stacked causal blocks, a final norm, and a linear head that produces a probability distribution over the vocabulary for every position.</p><p>Training uses <strong>next-token cross-entropy</strong> with <em>teacher forcing</em>: thanks to the causal mask, the model predicts the next token at <em>every</em> position simultaneously in one forward pass, and the loss averages over all of them &mdash; extremely efficient. Generation reverses this: sample a token, append it, repeat (autoregression). This is the entire GPT recipe; <em>scaling laws</em> say the loss falls predictably as you add parameters, data, and compute &mdash; the only real difference between this and GPT-4.</p></div>
-  <img src="assets/visuals/triptychs/09.svg" alt="Diagram for 09" style="width:100%; margin: 32px 0; border-radius: 8px; border: 1px solid var(--line); background: var(--panel);" />
+  <section class="visuals" aria-label="Visual walkthrough"><div class="visual-kicker">Visual walkthrough</div><div class="visual-grid"><figure class="visual-card"><img src="assets/visuals/09-1-token-position.webp" alt="Token tiles and position rhythm combining into model input." loading="lazy" decoding="async"><figcaption><strong>Token plus position</strong>Token identity and position are combined before the transformer stack.</figcaption></figure><figure class="visual-card"><img src="assets/visuals/09-2-gpt-stack.webp" alt="Stacked transformer blocks receiving a flowing manuscript-like dataset." loading="lazy" decoding="async"><figcaption><strong>GPT stack</strong>Causal transformer blocks learn next-token patterns from the training corpus.</figcaption></figure><figure class="visual-card"><img src="assets/visuals/09-3-next-token-output.webp" alt="Output probability beams selecting abstract next-token tiles." loading="lazy" decoding="async"><figcaption><strong>Next-token head</strong>Generation samples one next token, appends it, and repeats.</figcaption></figure></div></section>
   <div class="term">
     <div class="top"><span class="dot g"></span><span class="dot"></span><span class="dot"></span>
       <span>09_tiny_gpt.py</span><span class="out-lab">output</span></div>

@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>04 &middot; Embeddings &amp; context &mdash; Build an LLM from Scratch</title>
 <meta name="description" content="the Bengio MLP — names start looking real">
+<link rel="icon" href="data:,">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&display=swap" rel="stylesheet">
@@ -23,13 +24,14 @@
     <div><h1>Embeddings &amp; context</h1><div class="tag">the Bengio MLP — names start looking real</div></div>
   </div>
   <span class="file">04_mlp_lm.py</span>
+  <a class="nb-btn" href="https://github.com/anchitgupt/learn_llm_code/blob/main/04_mlp_lm.ipynb">&#9658; Open as notebook (with output)</a>
 </div></section>
 
 <section class="section"><div class="wrap stepwrap">
   <div class="lead"><p>The leap. Each character becomes a small <strong>learned vector</strong> (an embedding), and the model looks at a <strong>window</strong> of previous characters at once. Suddenly the output is full of real names: <code>lucas, isabella, liam, ella</code>.</p>
 <p>Embeddings are the single most important idea in modern LLMs &mdash; every token in GPT is one. The architecture here is just the XOR net from #00 with <em>look-up &rarr; flatten &rarr; feed</em> bolted onto the front.</p></div>
   <div class="eq">e = C[context]&emsp;&middot;&emsp;h = tanh(W&#8321;&middot;flatten(e) + b&#8321;)&emsp;&middot;&emsp;logits = W&#8322;&middot;h<span class="cap">Bengio's neural LM: look up embeddings for a window, then an MLP predicts the next token.</span></div><div class="theory"><div class="lab">The theory</div><p>This is the 2003 Bengio neural language model, and it introduces the idea that powers everything after it: the <strong>embedding</strong>. Each token is mapped to a dense, learned vector instead of a one-hot. Because similar tokens can learn similar vectors, the model shares statistical strength across contexts &mdash; directly fighting the <em>curse of dimensionality</em> that makes count-based n-grams blow up as the context grows.</p><p>The second idea is a fixed <strong>context window</strong>: concatenate the embeddings of the previous <em>n</em> tokens and feed them through an MLP (the same tanh network as #00) to predict the next one. Now the prediction depends on several tokens jointly, so generated names look real. The remaining limitation &mdash; a <em>fixed</em>, small window &mdash; is what attention later removes.</p></div>
-  <img src="assets/visuals/triptychs/04.svg" alt="Diagram for 04" style="width:100%; margin: 32px 0; border-radius: 8px; border: 1px solid var(--line); background: var(--panel);" />
+  <section class="visuals" aria-label="Visual walkthrough"><div class="visual-kicker">Visual walkthrough</div><div class="visual-grid"><figure class="visual-card"><img src="assets/visuals/04-1-embedding-lookup.webp" alt="Token ID tiles looking up dense vector columns in an embedding table." loading="lazy" decoding="async"><figcaption><strong>Embedding lookup</strong>Token IDs index rows in an embedding table instead of staying one-hot.</figcaption></figure><figure class="visual-card"><img src="assets/visuals/04-2-context-window.webp" alt="Multiple embedding vectors aligned inside a fixed context window." loading="lazy" decoding="async"><figcaption><strong>Context window</strong>Several previous embeddings are packed together so the model sees local history.</figcaption></figure><figure class="visual-card"><img src="assets/visuals/04-3-mlp-prediction.webp" alt="Context vectors flowing through layered neural network panels to output bars." loading="lazy" decoding="async"><figcaption><strong>MLP prediction</strong>The flattened context feeds an MLP that predicts the next character distribution.</figcaption></figure></div></section>
   <div class="term">
     <div class="top"><span class="dot g"></span><span class="dot"></span><span class="dot"></span>
       <span>04_mlp_lm.py</span><span class="out-lab">output</span></div>

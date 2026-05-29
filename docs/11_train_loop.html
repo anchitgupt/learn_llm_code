@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>11 &middot; Production training &mdash; Build an LLM from Scratch</title>
 <meta name="description" content="resumable checkpoints + LR warmup/decay">
+<link rel="icon" href="data:,">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&display=swap" rel="stylesheet">
@@ -23,13 +24,14 @@
     <div><h1>Production training</h1><div class="tag">resumable checkpoints + LR warmup/decay</div></div>
   </div>
   <span class="file">11_train_loop.py</span>
+  <a class="nb-btn" href="https://github.com/anchitgupt/learn_llm_code/blob/main/11_train_loop.ipynb">&#9658; Open as notebook (with output)</a>
 </div></section>
 
 <section class="section"><div class="wrap stepwrap">
   <div class="lead"><p>A bare loop won't survive a multi-day run. This adds <strong>resumable checkpoints</strong> (model + optimizer + step), a <strong>learning-rate schedule</strong> (warmup then cosine decay), <strong>gradient clipping</strong>, and <strong>best-model tracking</strong>.</p>
 <p>Run it once, stop, run it again &mdash; it picks up exactly where it left off. That's how real training survives crashes and restarts.</p></div>
   <div class="eq">lr(t): warmup &rarr; cosine decay&emsp;&middot;&emsp;clip &Vert;g&Vert; &le; c&emsp;&middot;&emsp;AdamW: decoupled weight decay<span class="cap">the engineering that lets a run survive hours, crashes, and bad batches.</span></div><div class="theory"><div class="lab">The theory</div><p>Real training needs more than a loop. A <strong>learning-rate schedule</strong> &mdash; a linear <em>warmup</em> followed by <em>cosine decay</em> &mdash; starts small to avoid instability when early gradients are large and poorly conditioned, then anneals to refine the solution. <strong>Gradient clipping</strong> caps the gradient norm so a single pathological batch can't blow the weights to infinity.</p><p><strong>Checkpointing</strong> the model, optimizer state, and step count makes a run <em>resumable</em> &mdash; essential for multi-day training and crash recovery &mdash; while tracking the best validation loss guards against overfitting. <strong>AdamW</strong> decouples weight decay from the gradient update, a small change that consistently improves generalization. These are the unglamorous details that separate a toy loop from a real training run.</p></div>
-  <img src="assets/visuals/triptychs/11.svg" alt="Diagram for 11" style="width:100%; margin: 32px 0; border-radius: 8px; border: 1px solid var(--line); background: var(--panel);" />
+  <section class="visuals" aria-label="Visual walkthrough"><div class="visual-kicker">Visual walkthrough</div><div class="visual-grid"><figure class="visual-card"><img src="assets/visuals/11-1-training-loop.webp" alt="Closed loop of batches flowing through model, loss, gradients, and update." loading="lazy" decoding="async"><figcaption><strong>Training loop</strong>Batches, loss, gradients, and optimizer updates form the reliable training cycle.</figcaption></figure><figure class="visual-card"><img src="assets/visuals/11-2-lr-and-clipping.webp" alt="Learning-rate curve beside a clipped gradient spike." loading="lazy" decoding="async"><figcaption><strong>Schedule and clipping</strong>Warmup, decay, and gradient clipping prevent unstable updates.</figcaption></figure><figure class="visual-card"><img src="assets/visuals/11-3-checkpoint-resume.webp" alt="Checkpoint storage blocks preserving model and optimizer state." loading="lazy" decoding="async"><figcaption><strong>Checkpointing</strong>Model, optimizer, and step state are saved so training can resume exactly.</figcaption></figure></div></section>
   <div class="term">
     <div class="top"><span class="dot g"></span><span class="dot"></span><span class="dot"></span>
       <span>11_train_loop.py</span><span class="out-lab">output</span></div>

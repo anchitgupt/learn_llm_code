@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Build an LLM from Scratch &mdash; the learning ladder</title>
 <meta name="description" content="Fifteen small, runnable Python scripts that take you from a neural network to a 2026-architecture, instruction- and preference-tuned GPT. No black boxes.">
+<link rel="icon" href="data:,">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&display=swap" rel="stylesheet">
@@ -53,37 +54,37 @@
 <section class="section" id="ladder"><div class="wrap">
   <p class="eyebrow">The climb</p>
   <h2 class="sec">The ladder.</h2>
-  <p class="sec-lede">Seventeen rungs, each its own page &mdash; the idea, the key formula, the theory, the real terminal output, and the full source.</p>
+  <p class="sec-lede">Seventeen rungs, each its own page &mdash; the idea, the key formula, the theory, the real terminal output, and the full source. Every page also links to an executed Jupyter notebook you can run yourself.</p>
 <div class="phlabel first">Foundation</div><div class="grid">
-<a class="card" href="00_neural_network.html"><span class="go">&rarr;</span><div class="cn">00</div><h3>A neural network</h3><p>forward pass + backprop, learning XOR</p></a>
+<a class="card" href="00_neural_network.html"><span class="go">&rarr;</span><img class="thumb" src="assets/visuals/00-1-xor-corners.webp" alt="" loading="lazy" decoding="async"><div class="cn">00</div><h3>A neural network</h3><p>forward pass + backprop, learning XOR</p></a>
 </div>
 <div class="phlabel">From neural net to language</div><div class="grid">
-<a class="card" href="01_bigram_counts.html"><span class="go">&rarr;</span><div class="cn">01</div><h3>The simplest language model</h3><p>predict the next character by counting</p></a>
-<a class="card" href="02_bigram_nn.html"><span class="go">&rarr;</span><div class="cn">02</div><h3>The same model, learned</h3><p>softmax + cross-entropy via gradient descent</p></a>
-<a class="card" href="03_tokenizer.html"><span class="go">&rarr;</span><div class="cn">03</div><h3>Turning text into numbers</h3><p>char-level and Byte-Pair Encoding (BPE)</p></a>
+<a class="card" href="01_bigram_counts.html"><span class="go">&rarr;</span><img class="thumb" src="assets/visuals/01-1-pair-stream.webp" alt="" loading="lazy" decoding="async"><div class="cn">01</div><h3>The simplest language model</h3><p>predict the next character by counting</p></a>
+<a class="card" href="02_bigram_nn.html"><span class="go">&rarr;</span><img class="thumb" src="assets/visuals/02-1-one-hot-weights.webp" alt="" loading="lazy" decoding="async"><div class="cn">02</div><h3>The same model, learned</h3><p>softmax + cross-entropy via gradient descent</p></a>
+<a class="card" href="03_tokenizer.html"><span class="go">&rarr;</span><img class="thumb" src="assets/visuals/03-1-raw-tokens.webp" alt="" loading="lazy" decoding="async"><div class="cn">03</div><h3>Turning text into numbers</h3><p>char-level and Byte-Pair Encoding (BPE)</p></a>
 </div>
 <div class="phlabel">The deep-learning toolkit</div><div class="grid">
-<a class="card" href="04_mlp_lm.html"><span class="go">&rarr;</span><div class="cn">04</div><h3>Embeddings &amp; context</h3><p>the Bengio MLP — names start looking real</p></a>
-<a class="card" href="05_autograd.html"><span class="go">&rarr;</span><div class="cn">05</div><h3>Automatic differentiation</h3><p>a mini-micrograd — how backprop automates itself</p></a>
-<a class="card" href="06_switch_to_pytorch.html"><span class="go">&rarr;</span><div class="cn">06</div><h3>Switching to PyTorch</h3><p>all the hand-coded backprop collapses to one line</p></a>
+<a class="card" href="04_mlp_lm.html"><span class="go">&rarr;</span><img class="thumb" src="assets/visuals/04-1-embedding-lookup.webp" alt="" loading="lazy" decoding="async"><div class="cn">04</div><h3>Embeddings &amp; context</h3><p>the Bengio MLP — names start looking real</p></a>
+<a class="card" href="05_autograd.html"><span class="go">&rarr;</span><img class="thumb" src="assets/visuals/05-1-forward-graph.webp" alt="" loading="lazy" decoding="async"><div class="cn">05</div><h3>Automatic differentiation</h3><p>a mini-micrograd — how backprop automates itself</p></a>
+<a class="card" href="06_switch_to_pytorch.html"><span class="go">&rarr;</span><img class="thumb" src="assets/visuals/06-1-manual-gradients.webp" alt="" loading="lazy" decoding="async"><div class="cn">06</div><h3>Switching to PyTorch</h3><p>all the hand-coded backprop collapses to one line</p></a>
 </div>
 <div class="phlabel">The Transformer</div><div class="grid">
-<a class="card" href="07_self_attention.html"><span class="go">&rarr;</span><div class="cn">07</div><h3>Self-attention</h3><p>the mechanism that makes transformers work</p></a>
-<a class="card" href="08_transformer_block.html"><span class="go">&rarr;</span><div class="cn">08</div><h3>The transformer block</h3><p>multi-head attention + MLP + residuals + norm</p></a>
-<a class="card" href="09_tiny_gpt.html"><span class="go">&rarr;</span><div class="cn">09</div><h3>A real GPT</h3><p>trained on Shakespeare — it generates text</p></a>
+<a class="card" href="07_self_attention.html"><span class="go">&rarr;</span><img class="thumb" src="assets/visuals/07-1-qkv-streams.webp" alt="" loading="lazy" decoding="async"><div class="cn">07</div><h3>Self-attention</h3><p>the mechanism that makes transformers work</p></a>
+<a class="card" href="08_transformer_block.html"><span class="go">&rarr;</span><img class="thumb" src="assets/visuals/08-1-attention-heads.webp" alt="" loading="lazy" decoding="async"><div class="cn">08</div><h3>The transformer block</h3><p>multi-head attention + MLP + residuals + norm</p></a>
+<a class="card" href="09_tiny_gpt.html"><span class="go">&rarr;</span><img class="thumb" src="assets/visuals/09-1-token-position.webp" alt="" loading="lazy" decoding="async"><div class="cn">09</div><h3>A real GPT</h3><p>trained on Shakespeare — it generates text</p></a>
 </div>
 <div class="phlabel">Make it usable</div><div class="grid">
-<a class="card" href="10_sampling.html"><span class="go">&rarr;</span><div class="cn">10</div><h3>Sampling strategies</h3><p>temperature, top-k, top-p — one model, many writers</p></a>
-<a class="card" href="11_train_loop.html"><span class="go">&rarr;</span><div class="cn">11</div><h3>Production training</h3><p>resumable checkpoints + LR warmup/decay</p></a>
-<a class="card" href="12_finetune.html"><span class="go">&rarr;</span><div class="cn">12</div><h3>Instruction tuning</h3><p>base model → assistant (the ChatGPT leap)</p></a>
+<a class="card" href="10_sampling.html"><span class="go">&rarr;</span><img class="thumb" src="assets/visuals/10-1-greedy-loop.webp" alt="" loading="lazy" decoding="async"><div class="cn">10</div><h3>Sampling strategies</h3><p>temperature, top-k, top-p — one model, many writers</p></a>
+<a class="card" href="11_train_loop.html"><span class="go">&rarr;</span><img class="thumb" src="assets/visuals/11-1-training-loop.webp" alt="" loading="lazy" decoding="async"><div class="cn">11</div><h3>Production training</h3><p>resumable checkpoints + LR warmup/decay</p></a>
+<a class="card" href="12_finetune.html"><span class="go">&rarr;</span><img class="thumb" src="assets/visuals/12-1-instruction-pairs.webp" alt="" loading="lazy" decoding="async"><div class="cn">12</div><h3>Instruction tuning</h3><p>base model → assistant (the ChatGPT leap)</p></a>
 </div>
 <div class="phlabel">State of the art · 2026</div><div class="grid">
-<a class="card" href="13_dpo.html"><span class="go">&rarr;</span><div class="cn">13</div><h3>Preference tuning with DPO</h3><p>the modern alternative to RLHF</p></a>
-<a class="card" href="14_modern_gpt.html"><span class="go">&rarr;</span><div class="cn">14</div><h3>The 2026 architecture</h3><p>RoPE · RMSNorm · SwiGLU · GQA</p></a>
+<a class="card" href="13_dpo.html"><span class="go">&rarr;</span><img class="thumb" src="assets/visuals/13-1-chosen-rejected.webp" alt="" loading="lazy" decoding="async"><div class="cn">13</div><h3>Preference tuning with DPO</h3><p>the modern alternative to RLHF</p></a>
+<a class="card" href="14_modern_gpt.html"><span class="go">&rarr;</span><img class="thumb" src="assets/visuals/14-1-rope-rotation.webp" alt="" loading="lazy" decoding="async"><div class="cn">14</div><h3>The 2026 architecture</h3><p>RoPE · RMSNorm · SwiGLU · GQA</p></a>
 </div>
 <div class="phlabel">Inference efficiency · 2026</div><div class="grid">
-<a class="card" href="15_kv_cache.html"><span class="go">&rarr;</span><div class="cn">15</div><h3>The KV cache</h3><p>fix O(T²) generation — cache past keys/values</p></a>
-<a class="card" href="16_kv_quant.html"><span class="go">&rarr;</span><div class="cn">16</div><h3>Compressing the cache · TurboQuant</h3><p>3-bit KV cache via the rotation trick</p></a>
+<a class="card" href="15_kv_cache.html"><span class="go">&rarr;</span><img class="thumb" src="assets/visuals/15-1-naive-recompute.webp" alt="" loading="lazy" decoding="async"><div class="cn">15</div><h3>The KV cache</h3><p>fix O(T²) generation — cache past keys/values</p></a>
+<a class="card" href="16_kv_quant.html"><span class="go">&rarr;</span><img class="thumb" src="assets/visuals/16-1-outlier-channels.webp" alt="" loading="lazy" decoding="async"><div class="cn">16</div><h3>Compressing the cache · TurboQuant</h3><p>3-bit KV cache via the rotation trick</p></a>
 </div>
 </div></section>
 

@@ -13,6 +13,7 @@ import pathlib
 
 ROOT = pathlib.Path(__file__).parent
 DOCS = ROOT / "docs"
+REPO = "https://github.com/anchitgupt/learn_llm_code"   # for "open notebook" links
 
 
 def esc(s: str) -> str:
@@ -388,6 +389,248 @@ THEORY = {
 }
 
 
+VISUALS = {
+    "00": [
+        dict(file="assets/visuals/00-1-xor-corners.webp",
+             title="XOR corners",
+             caption="The matching labels sit on opposite corners, so one straight split cannot solve the task.",
+             alt="Four glowing XOR corner points with crossed class structure."),
+        dict(file="assets/visuals/00-2-hidden-features.webp",
+             title="Hidden features",
+             caption="A hidden layer bends the input space into features a final neuron can separate.",
+             alt="Small neural network bending input signals through a hidden layer."),
+        dict(file="assets/visuals/00-3-output-prediction.webp",
+             title="Output prediction",
+             caption="Forward pass, loss, and backprop nudge the weights until the XOR outputs are correct.",
+             alt="Output neuron receiving weighted hidden signals and resolving binary predictions."),
+    ],
+    "01": [
+        dict(file="assets/visuals/01-1-pair-stream.webp",
+             title="Pair extraction",
+             caption="The model reads adjacent character pairs and asks which symbol tends to come next.",
+             alt="Character-like tiles flowing into adjacent pair arrows."),
+        dict(file="assets/visuals/01-2-count-matrix.webp",
+             title="Count table",
+             caption="Every current-character row becomes a distribution after counts are normalized.",
+             alt="Glowing square transition matrix filling with count marks."),
+        dict(file="assets/visuals/01-3-sample-path.webp",
+             title="Sampling path",
+             caption="Generation repeatedly samples from the row for the current character.",
+             alt="Curving sampling path stepping through a matrix of character states."),
+    ],
+    "02": [
+        dict(file="assets/visuals/02-1-one-hot-weights.webp",
+             title="One-hot input",
+             caption="A one-hot character selects the row of weights that scores possible next characters.",
+             alt="One-hot vector feeding a glowing weight matrix."),
+        dict(file="assets/visuals/02-2-softmax-probs.webp",
+             title="Softmax probabilities",
+             caption="Logits become probabilities; cross-entropy rewards the true next token.",
+             alt="Logit bars flowing through a softmax funnel into probability bars."),
+        dict(file="assets/visuals/02-3-descent-to-counts.webp",
+             title="Learned counts",
+             caption="Gradient descent moves the weights toward the same transition pattern counting found.",
+             alt="Optimization path descending toward a transition distribution."),
+    ],
+    "03": [
+        dict(file="assets/visuals/03-1-raw-tokens.webp",
+             title="Raw symbols",
+             caption="Text first becomes small reversible pieces: characters or bytes.",
+             alt="Many small text-like tiles split into raw tokens."),
+        dict(file="assets/visuals/03-2-pair-merges.webp",
+             title="Frequent merges",
+             caption="BPE repeatedly merges the most frequent adjacent pair into a larger token.",
+             alt="Repeated adjacent token pairs combining into larger glowing chunks."),
+        dict(file="assets/visuals/03-3-compressed-context.webp",
+             title="Shorter context",
+             caption="Common chunks use fewer tokens, so more real text fits into the model window.",
+             alt="Compressed token chunks fitting into a context-window rail."),
+    ],
+    "04": [
+        dict(file="assets/visuals/04-1-embedding-lookup.webp",
+             title="Embedding lookup",
+             caption="Token IDs index rows in an embedding table instead of staying one-hot.",
+             alt="Token ID tiles looking up dense vector columns in an embedding table."),
+        dict(file="assets/visuals/04-2-context-window.webp",
+             title="Context window",
+             caption="Several previous embeddings are packed together so the model sees local history.",
+             alt="Multiple embedding vectors aligned inside a fixed context window."),
+        dict(file="assets/visuals/04-3-mlp-prediction.webp",
+             title="MLP prediction",
+             caption="The flattened context feeds an MLP that predicts the next character distribution.",
+             alt="Context vectors flowing through layered neural network panels to output bars."),
+    ],
+    "05": [
+        dict(file="assets/visuals/05-1-forward-graph.webp",
+             title="Forward graph",
+             caption="Each scalar operation records the values that produced it.",
+             alt="Scalar computation graph flowing from inputs to a final output node."),
+        dict(file="assets/visuals/05-2-local-rules.webp",
+             title="Local rules",
+             caption="Every operation stores a tiny derivative rule for its immediate parents.",
+             alt="Computation nodes with small derivative-rule modules attached."),
+        dict(file="assets/visuals/05-3-backward-gradients.webp",
+             title="Reverse pass",
+             caption="Backward walks the graph in reverse, accumulating gradients at the parameters.",
+             alt="Amber gradient arrows flowing backward through a computation graph."),
+    ],
+    "06": [
+        dict(file="assets/visuals/06-1-manual-gradients.webp",
+             title="Manual gradients",
+             caption="The hand-derived derivative wiring grows messy as models get larger.",
+             alt="Dense manual gradient wiring around tensor-like blocks."),
+        dict(file="assets/visuals/06-2-tensor-autograd.webp",
+             title="Tensor autograd",
+             caption="PyTorch records tensor operations and runs reverse-mode autodiff over the graph.",
+             alt="Tensor blocks flowing through reusable layers with an autograd graph."),
+        dict(file="assets/visuals/06-3-optimizer-step.webp",
+             title="Optimizer update",
+             caption="After backward, the optimizer applies the parameter update in one step.",
+             alt="Optimizer loop updating model parameter blocks after backward signals."),
+    ],
+    "07": [
+        dict(file="assets/visuals/07-1-qkv-streams.webp",
+             title="Q, K, V streams",
+             caption="Each token emits what it seeks, what it offers, and what it will pass on.",
+             alt="Token columns emitting query, key, and value streams."),
+        dict(file="assets/visuals/07-2-causal-mask.webp",
+             title="Causal mask",
+             caption="The lower triangle lets each token attend only to itself and the past.",
+             alt="Lower-triangular attention matrix with future positions blocked."),
+        dict(file="assets/visuals/07-3-weighted-values.webp",
+             title="Weighted values",
+             caption="Attention weights mix value vectors into context-aware token representations.",
+             alt="Weighted value vectors merging into updated token representations."),
+    ],
+    "08": [
+        dict(file="assets/visuals/08-1-attention-heads.webp",
+             title="Many heads",
+             caption="Multiple attention heads inspect the same sequence from different subspaces.",
+             alt="Parallel attention heads running across token rows."),
+        dict(file="assets/visuals/08-2-residual-norm.webp",
+             title="Residual and norm",
+             caption="Skip paths and normalization keep the block trainable while sublayers do useful work.",
+             alt="Transformer sublayers wrapped by residual arcs and normalization rings."),
+        dict(file="assets/visuals/08-3-stacked-blocks.webp",
+             title="Stackable block",
+             caption="Shape in equals shape out, so GPT can stack the same block repeatedly.",
+             alt="Identical transformer blocks stacked vertically with matching input and output shapes."),
+    ],
+    "09": [
+        dict(file="assets/visuals/09-1-token-position.webp",
+             title="Token plus position",
+             caption="Token identity and position are combined before the transformer stack.",
+             alt="Token tiles and position rhythm combining into model input."),
+        dict(file="assets/visuals/09-2-gpt-stack.webp",
+             title="GPT stack",
+             caption="Causal transformer blocks learn next-token patterns from the training corpus.",
+             alt="Stacked transformer blocks receiving a flowing manuscript-like dataset."),
+        dict(file="assets/visuals/09-3-next-token-output.webp",
+             title="Next-token head",
+             caption="Generation samples one next token, appends it, and repeats.",
+             alt="Output probability beams selecting abstract next-token tiles."),
+    ],
+    "10": [
+        dict(file="assets/visuals/10-1-greedy-loop.webp",
+             title="Greedy loop",
+             caption="Always taking the top token is locally safe but can fall into repetition.",
+             alt="Tallest probability bar looping back into repeated token choices."),
+        dict(file="assets/visuals/10-2-temperature-shape.webp",
+             title="Temperature",
+             caption="Temperature sharpens or flattens the distribution before sampling.",
+             alt="Probability bars reshaped from sharp to broad by heated particle flow."),
+        dict(file="assets/visuals/10-3-topk-topp-filter.webp",
+             title="Top-k and top-p",
+             caption="Truncation removes the unreliable tail while keeping enough variety.",
+             alt="Probability distribution with tail candidates filtered behind a cutoff gate."),
+    ],
+    "11": [
+        dict(file="assets/visuals/11-1-training-loop.webp",
+             title="Training loop",
+             caption="Batches, loss, gradients, and optimizer updates form the reliable training cycle.",
+             alt="Closed loop of batches flowing through model, loss, gradients, and update."),
+        dict(file="assets/visuals/11-2-lr-and-clipping.webp",
+             title="Schedule and clipping",
+             caption="Warmup, decay, and gradient clipping prevent unstable updates.",
+             alt="Learning-rate curve beside a clipped gradient spike."),
+        dict(file="assets/visuals/11-3-checkpoint-resume.webp",
+             title="Checkpointing",
+             caption="Model, optimizer, and step state are saved so training can resume exactly.",
+             alt="Checkpoint storage blocks preserving model and optimizer state."),
+    ],
+    "12": [
+        dict(file="assets/visuals/12-1-instruction-pairs.webp",
+             title="Instruction pairs",
+             caption="Supervised examples show the model how an instruction should be answered.",
+             alt="Prompt and response cards flowing into a base language model."),
+        dict(file="assets/visuals/12-2-loss-mask.webp",
+             title="Loss mask",
+             caption="Only response tokens send loss backward; prompt tokens are context.",
+             alt="Prompt side masked while answer side sends training signal backward."),
+        dict(file="assets/visuals/12-3-assistant-path.webp",
+             title="Assistant behavior",
+             caption="The tuned model follows the requested answer path instead of simply continuing text.",
+             alt="Helpful response path glowing brighter than open-ended continuation paths."),
+    ],
+    "13": [
+        dict(file="assets/visuals/13-1-chosen-rejected.webp",
+             title="Preference pair",
+             caption="DPO trains on a chosen response and a rejected response from the same prompt.",
+             alt="Two response paths, one bright chosen path and one dim rejected path."),
+        dict(file="assets/visuals/13-2-policy-reference.webp",
+             title="Policy and reference",
+             caption="The trainable policy is compared against a frozen reference copy.",
+             alt="Two model blocks side by side emitting comparable probability streams."),
+        dict(file="assets/visuals/13-3-preference-gap.webp",
+             title="Wider gap",
+             caption="Optimization increases the chosen-vs-rejected log-probability margin.",
+             alt="Chosen response probability rising while rejected probability falls."),
+    ],
+    "14": [
+        dict(file="assets/visuals/14-1-rope-rotation.webp",
+             title="RoPE",
+             caption="Rotary position geometry makes attention depend on relative offsets.",
+             alt="Query and key vectors rotating around circular position geometry."),
+        dict(file="assets/visuals/14-2-norm-swiglu.webp",
+             title="RMSNorm and SwiGLU",
+             caption="Normalization stabilizes the stream while gated feed-forwards add efficient capacity.",
+             alt="Normalized residual stream passing through a glowing gated feed-forward unit."),
+        dict(file="assets/visuals/14-3-gqa-sharing.webp",
+             title="GQA",
+             caption="Several query heads share fewer key/value heads, shrinking the inference cache.",
+             alt="Grouped query heads sharing a smaller set of key and value heads."),
+    ],
+    "15": [
+        dict(file="assets/visuals/15-1-naive-recompute.webp",
+             title="Naive recompute",
+             caption="Without a cache, generation repeatedly re-encodes the whole growing context.",
+             alt="Repeated triangular recomputation work for a growing token sequence."),
+        dict(file="assets/visuals/15-2-cache-append.webp",
+             title="Append K/V",
+             caption="The cache stores past keys and values, then appends only the new token's pair.",
+             alt="Layered key-value cache shelves receiving one new block at a time."),
+        dict(file="assets/visuals/15-3-smaller-gqa-cache.webp",
+             title="Smaller cache",
+             caption="GQA reduces the number of key/value heads that must be stored.",
+             alt="Compact grouped-query cache feeding the same output stream."),
+    ],
+    "16": [
+        dict(file="assets/visuals/16-1-outlier-channels.webp",
+             title="Outlier channels",
+             caption="A few huge coordinates stretch the quantization range and waste low-bit precision.",
+             alt="Vector histogram with a few tall amber outlier channels dominating the range."),
+        dict(file="assets/visuals/16-2-rotation-spread.webp",
+             title="Rotate and spread",
+             caption="An orthogonal rotation spreads outlier energy while preserving attention dot products.",
+             alt="Outlier vector passing through a rotation plane into a more even distribution."),
+        dict(file="assets/visuals/16-3-three-bit-cache.webp",
+             title="3-bit cache",
+             caption="After rotation, the cache can be stored in very few bits with better fidelity.",
+             alt="Compact quantized cache blocks feeding an attention layer."),
+    ],
+}
+
+
 CSS = r"""
 :root{
   --bg:#0a0c10; --bg2:#0d1016; --panel:#13161f; --panel2:#181c27;
@@ -573,8 +816,10 @@ footer b{color:var(--ink)}
 .phlabel.first{border-top:0;padding-top:0;margin-top:26px}
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(258px,1fr));gap:14px;margin-top:16px}
 .card{position:relative;display:block;background:var(--panel);border:1px solid var(--line);
-  border-radius:6px;padding:18px 18px 20px;transition:transform .16s,border-color .16s}
+  border-radius:6px;padding:18px 18px 20px;overflow:hidden;transition:transform .16s,border-color .16s}
 .card:hover{border-color:var(--accent);transform:translateY(-3px);text-decoration:none}
+.card .thumb{display:block;width:calc(100% + 36px);height:132px;margin:-18px -18px 14px;
+  object-fit:cover;border-bottom:1px solid var(--line);background:#070809;filter:saturate(.95)}
 .card .cn{font-family:var(--mono);font-size:13px;color:var(--faint)}
 .card h3{font-family:var(--mono);font-size:16px;font-weight:600;margin:7px 0;color:var(--ink)}
 .card:hover h3{color:var(--accent)}
@@ -594,8 +839,21 @@ footer b{color:var(--ink)}
 .sh-head .tag{font-family:var(--mono);font-size:14px;color:var(--accent);margin-top:9px}
 .stephero .file{display:inline-block;margin-top:20px;font-family:var(--mono);font-size:12px;
   color:var(--muted);border:1px solid var(--line);padding:5px 10px;border-radius:2px}
+.nb-btn{display:inline-block;margin:20px 0 0 10px;font-family:var(--mono);font-size:12px;
+  color:var(--accent);border:1px solid var(--accent-dim);padding:5px 12px;border-radius:2px}
+.nb-btn:hover{background:rgba(94,240,192,.08);text-decoration:none}
 .stepwrap{max-width:830px}
 .lead p{font-size:18.5px;line-height:1.75;color:#d7dbe2;margin:0 0 15px}
+.visuals{margin:30px 0 4px}
+.visual-kicker{font-family:var(--mono);font-size:11px;letter-spacing:.24em;text-transform:uppercase;
+  color:var(--amber);margin:0 0 12px}
+.visual-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+@media(max-width:820px){.visual-grid{grid-template-columns:1fr}}
+.visual-card{margin:0;background:var(--panel);border:1px solid var(--line);border-radius:6px;overflow:hidden}
+.visual-card img{display:block;width:100%;height:auto;background:#070809}
+.visual-card figcaption{padding:12px 13px 14px;color:#bfc5cf;font-size:14.5px;line-height:1.45}
+.visual-card figcaption strong{display:block;font-family:var(--mono);font-size:12px;color:var(--accent);
+  margin:0 0 6px;letter-spacing:.05em}
 .srch{font-family:var(--mono);font-size:12px;letter-spacing:.2em;text-transform:uppercase;
   color:var(--amber);margin:32px 0 0}
 .srch span{color:var(--muted);letter-spacing:0;text-transform:none}
@@ -676,6 +934,25 @@ def eq_theory_html(s):
     return "".join(parts)
 
 
+def visual_gallery_html(s):
+    """Three concept images for a lesson page."""
+    visuals = VISUALS.get(s["n"], [])
+    if not visuals:
+        return ""
+    cards = []
+    for v in visuals:
+        cards.append(
+            '<figure class="visual-card">'
+            f'<img src="{esc(v["file"])}" alt="{esc(v["alt"])}" loading="lazy" decoding="async">'
+            f'<figcaption><strong>{esc(v["title"])}</strong>{esc(v["caption"])}</figcaption>'
+            '</figure>')
+    return (
+        '<section class="visuals" aria-label="Visual walkthrough">'
+        '<div class="visual-kicker">Visual walkthrough</div>'
+        f'<div class="visual-grid">{"".join(cards)}</div>'
+        '</section>')
+
+
 HEAD = """<!doctype html>
 <html lang="en">
 <head>
@@ -683,6 +960,7 @@ HEAD = """<!doctype html>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>{title}</title>
 <meta name="description" content="{desc}">
+<link rel="icon" href="data:,">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&display=swap" rel="stylesheet">
@@ -715,6 +993,8 @@ def render_step_page(s, prev, nxt):
                  f'<div class="pt">{nxt["n"]} &middot; {esc(nxt["title"])}</div></a>'
                  if nxt else "<span></span>")
 
+    nb_url = f'{REPO}/blob/main/{s["file"].replace(".py", ".ipynb")}'
+
     head = HEAD.format(
         title=f"{s['n']} &middot; {esc(s['title'])} &mdash; Build an LLM from Scratch",
         desc=esc(s["tag"]))
@@ -731,12 +1011,13 @@ def render_step_page(s, prev, nxt):
     <div><h1>{esc(s['title'])}</h1><div class="tag">{s['tag']}</div></div>
   </div>
   <span class="file">{esc(s['file'])}</span>
+  <a class="nb-btn" href="{nb_url}">&#9658; Open as notebook (with output)</a>
 </div></section>
 
 <section class="section"><div class="wrap stepwrap">
   <div class="lead">{body}</div>
   {eq_theory_html(s)}
-  <img src="assets/visuals/triptychs/{s['n']}.svg" alt="Diagram for {s['n']}" style="width:100%; margin: 32px 0; border-radius: 8px; border: 1px solid var(--line); background: var(--panel);" />
+  {visual_gallery_html(s)}
   <div class="term">
     <div class="top"><span class="dot g"></span><span class="dot"></span><span class="dot"></span>
       <span>{esc(s['file'])}</span><span class="out-lab">output</span></div>
@@ -760,8 +1041,11 @@ def render_step_page(s, prev, nxt):
 
 
 def render_card(s):
+    visual = VISUALS.get(s["n"], [{}])[0].get("file", "")
+    thumb = (f'<img class="thumb" src="{esc(visual)}" alt="" loading="lazy" decoding="async">'
+             if visual else "")
     return (f'<a class="card" href="{slug(s)}"><span class="go">&rarr;</span>'
-            f'<div class="cn">{s["n"]}</div><h3>{esc(s["title"])}</h3>'
+            f'{thumb}<div class="cn">{s["n"]}</div><h3>{esc(s["title"])}</h3>'
             f'<p>{s["tag"]}</p></a>')
 
 
@@ -789,7 +1073,7 @@ def index_page():
                   "Neural network &rarr; LLM &middot; in 17 steps")
     p = p.replace(
         "Read straight through, or jump to any rung. Each shows the idea, the real terminal output, and the full source.",
-        "Seventeen rungs, each its own page &mdash; the idea, the key formula, the theory, the real terminal output, and the full source.")
+        "Seventeen rungs, each its own page &mdash; the idea, the key formula, the theory, the real terminal output, and the full source. Every page also links to an executed Jupyter notebook you can run yourself.")
     ladder_old = ('  <div class="ladder" style="margin-top:34px">\n'
                   '    <nav class="index">__INDEX__</nav>\n'
                   '    <div class="steps">__STEPS__</div>\n'
@@ -811,6 +1095,7 @@ PAGE = """<!doctype html>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Build an LLM from Scratch &mdash; the learning ladder</title>
 <meta name="description" content="Fifteen small, runnable Python scripts that take you from a neural network to a 2026-architecture, instruction- and preference-tuned GPT. No black boxes.">
+<link rel="icon" href="data:,">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&display=swap" rel="stylesheet">
